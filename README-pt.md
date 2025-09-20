@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src=".github/assets/ui-design.png" height="250" alt="Adonis Web Kit">
+  <img src="https://raw.githubusercontent.com/gabrielmaialva33/adonis-kit/refs/heads/main/.github/assets/graphic-design.png" alt="Adonis Web Kit">
 </h1>
 
 <p align="center">

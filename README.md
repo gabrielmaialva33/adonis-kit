@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src=".github/assets/ui-design.png" height="250" alt="Adonis Web Kit">
+  <img src="https://raw.githubusercontent.com/gabrielmaialva33/adonis-kit/refs/heads/main/.github/assets/graphic-design.png" height="250" alt="Adonis Kit">
 </h1>
 
 <p align="center">
@@ -27,71 +27,65 @@
 
 ## :bookmark: About
 
-**Adonis Web Kit** is a modern, opinionated, and AI-first full-stack starter kit designed to accelerate the development
-of
-robust web applications. It combines a powerful **AdonisJS v6** backend with a dynamic **React 19** and **Inertia.js**
-frontend, all within a unified monorepo structure.
+**Adonis Kit** is a modern, opinionated, and AI-first API starter kit designed to accelerate the development of robust
+backend applications. Built with **AdonisJS v6**, it provides a powerful foundation for creating scalable REST APIs with
+comprehensive authentication, authorization, and data management capabilities.
 
 This project is not just a collection of technologies; it's a foundation engineered for efficiency, scalability, and
 seamless collaboration with AI development partners. By providing a well-defined architecture with features like
-authentication, role-based access control (RBAC), and file management out of the box, it allows developers (both human
-and AI) to focus on building unique business logic instead of boilerplate code.
+multi-guard authentication, role-based access control (RBAC), and file management out of the box, it allows developers (
+both human and AI) to focus on building unique business logic instead of boilerplate code.
 
 ### 🏗️ Architecture Overview
 
 ```mermaid
 graph TD
-    subgraph "Frontend (Inertia.js)"
-        FE_UI[React Components & Pages]
-        FE_HOOKS["Hooks (useAuth, useApi)"]
-        FE_UTILS[Utilities & Types]
+    subgraph "API Layer"
+        API_ROUTES[Routes]
+        API_MW["Middleware (Auth, ACL)"]
+        API_CTRL[Controllers]
+        API_VALIDATORS[Validators]
     end
 
-    subgraph "Backend (AdonisJS)"
-        BE_ROUTES[Routes]
-        BE_MW["Middleware (Auth, ACL)"]
-        BE_CTRL[Controllers]
-        BE_SERVICES[Services]
-        BE_REPOS[Repositories]
-        BE_MODELS[Lucid Models]
-    end
-
-    subgraph "Shared"
-        SHARED_TYPES[TypeScript Types]
-        SHARED_CONFIG[Config Files]
+    subgraph "Business Layer"
+        BL_SERVICES[Services]
+        BL_REPOS[Repositories]
+        BL_EVENTS[Events & Listeners]
     end
 
     subgraph "Data Layer"
-        DB[(PostgreSQL)]
-        CACHE[(Redis)]
+        DL_MODELS[Lucid Models]
+        DL_DB[(PostgreSQL)]
+        DL_CACHE[(Redis)]
     end
 
-    FE_UI --> BE_ROUTES
-    BE_ROUTES --> BE_MW
-    BE_MW --> BE_CTRL
-    BE_CTRL --> BE_SERVICES
-    BE_SERVICES --> BE_REPOS
-    BE_REPOS --> BE_MODELS
-    BE_MODELS --> DB
+    subgraph "Configuration"
+        CONF_AUTH[Auth Guards]
+        CONF_DB[Database Config]
+        CONF_STORAGE[File Storage]
+    end
 
-    BE_SERVICES --> CACHE
-    FE_HOOKS --> BE_ROUTES
-
-    FE_UTILS --> SHARED_TYPES
-    BE_CTRL --> SHARED_TYPES
+    API_ROUTES --> API_MW
+    API_MW --> API_CTRL
+    API_CTRL --> API_VALIDATORS
+    API_CTRL --> BL_SERVICES
+    BL_SERVICES --> BL_REPOS
+    BL_SERVICES --> BL_EVENTS
+    BL_REPOS --> DL_MODELS
+    DL_MODELS --> DL_DB
+    BL_SERVICES --> DL_CACHE
 ```
 
 ## :rocket: AI-First Development
 
 This starter kit is uniquely designed to maximize the effectiveness of AI-assisted coding.
 
-- **Unified Context (Monorepo)**: Having backend and frontend code in a single repository provides a complete context
-  for AI tools, enabling them to generate more accurate and cohesive code that spans the full stack.
-- **Strongly-Typed Foundation**: End-to-end TypeScript usage creates a clear contract between the frontend, backend, and
-  API layers. This reduces ambiguity and allows AI to understand data structures and function signatures, leading to
-  fewer errors.
-- **Modular and Opinionated Architecture**: The clear separation of concerns (controllers, services, repositories) makes
-  it easy for an AI to locate, understand, and modify specific parts of the codebase with precision.
+- **Well-Structured API Foundation**: The clear separation of concerns (controllers, services, repositories) makes it
+  easy for AI to locate, understand, and modify specific parts of the codebase with precision.
+- **Strongly-Typed Foundation**: Complete TypeScript usage creates a clear contract across all API layers. This reduces
+  ambiguity and allows AI to understand data structures and function signatures, leading to fewer errors.
+- **Modular and Opinionated Architecture**: Domain-driven service organization and consistent patterns make it simple
+  for AI to extend functionality following established conventions.
 - **Focus on Business Logic**: With boilerplate for authentication, permissions, and file storage already handled, AI
   can be directed to solve higher-level business problems from day one.
 
@@ -99,24 +93,20 @@ This starter kit is uniquely designed to maximize the effectiveness of AI-assist
 
 - **🔐 Multi-Guard Authentication**: Ready-to-use JWT-based authentication.
 - **👥 Advanced Role-Based Access Control (RBAC)**: Manage user permissions with roles and fine-grained rules.
-- **📁 File Management**: Pre-configured file upload service with support for local and S3 drivers.
-- **⚡️ Full-Stack Reactivity**: The power of React combined with the simplicity of a traditional server-rendered app,
-  thanks to Inertia.js.
-- **🎨 UI Components**: A set of beautiful, reusable UI components built with `shadcn/ui`, Tailwind CSS, and
-  `lucide-react`.
-- **✅ Type-Safe API**: Auto-completion and type checking for API calls and props.
+- **📁 File Management**: Pre-configured file upload service with support for local, S3, and GCS drivers.
+- **⚡️ High-Performance API**: Optimized REST endpoints with intelligent caching and queue processing.
+- **🔄 Event-Driven Architecture**: Built-in event system for decoupled, scalable application logic.
+- **✅ Type-Safe API**: Complete TypeScript coverage with auto-completion and type checking.
 - **🏥 Health Checks**: Integrated health check endpoint for monitoring.
 
 ## :computer: Technologies
 
 - **[AdonisJS v6](https://adonisjs.com/)**: A robust Node.js framework for the backend.
-- **[React 19](https://react.dev/)**: A powerful library for building user interfaces.
-- **[Inertia.js](https://inertiajs.com/)**: The glue that connects the modern frontend with the backend.
-- **[TypeScript](https://www.typescriptlang.org/)**: For type safety across the entire stack.
+- **[TypeScript](https://www.typescriptlang.org/)**: For type safety across the entire API.
 - **[PostgreSQL](https://www.postgresql.org/)**: A reliable and powerful relational database.
-- **[Redis](https://redis.io/)**: Used for caching and session management.
-- **[Vite](https://vitejs.dev/)**: For a lightning-fast frontend development experience.
-- **[Tailwind CSS](https://tailwindcss.com/)**: A utility-first CSS framework for rapid UI development.
+- **[Redis](https://redis.io/)**: Used for caching, queues, and session management.
+- **[VineJS](https://vinejs.dev/)**: Modern validation library for request data.
+- **[Lucid ORM](https://lucid.adonisjs.com/)**: Elegant ActiveRecord implementation for AdonisJS.
 
 ## :package: Installation
 
@@ -159,7 +149,7 @@ This starter kit is uniquely designed to maximize the effectiveness of AI-assist
    ```sh
    pnpm dev
    ```
-   _Your application will be available at `http://localhost:3333`._
+   _Your API will be available at `http://localhost:3333`._
 
 ### 📜 Available Scripts
 
