@@ -1,8 +1,8 @@
 import router from '@adonisjs/core/services/router'
 import { middleware } from '#start/kernel'
-import IRole from '#interfaces/role_interface'
+import IRole from '#modules/roles/interfaces/role_interface'
 
-const RolesController = () => import('#controllers/role/roles_controller')
+const RolesController = () => import('#modules/roles/controllers/roles_controller')
 
 router
   .group(() => {

@@ -1,6 +1,6 @@
 import { inject } from '@adonisjs/core'
 
-import RolesRepository from '#repositories/roles_repository'
+import RolesRepository from '#modules/roles/repositories/roles_repository'
 
 @inject()
 export default class ListRolesService {

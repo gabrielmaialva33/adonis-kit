@@ -1,9 +1,9 @@
 import { DateTime } from 'luxon'
 import { BaseModel, column, manyToMany, SnakeCaseNamingStrategy } from '@adonisjs/lucid/orm'
 import type { ManyToMany } from '@adonisjs/lucid/types/relations'
-import IRole from '#interfaces/role_interface'
-import User from '#models/user'
-import Permission from '#models/permission'
+import IRole from '#modules/roles/interfaces/role_interface'
+import User from '#modules/users/models/user'
+import Permission from '#modules/permissions/models/permission'
 
 export default class Role extends BaseModel {
   static table = 'roles'

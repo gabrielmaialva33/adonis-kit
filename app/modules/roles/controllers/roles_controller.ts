@@ -3,10 +3,10 @@ import { HttpContext } from '@adonisjs/core/http'
 import app from '@adonisjs/core/services/app'
 import db from '@adonisjs/lucid/services/db'
 
-import { attachRoleValidator } from '#validators/role'
+import { attachRoleValidator } from '#modules/roles/validators/roles_validator'
 
-import ListRolesService from '#services/roles/list_roles_service'
-import SyncRolesService from '#services/roles/sync_roles_service'
+import ListRolesService from '#modules/roles/services/list_roles_service'
+import SyncRolesService from '#modules/roles/services/sync_roles_service'
 
 @inject()
 export default class RolesController {
@@ -19,7 +19,7 @@ export default class RolesController {
     return response.json(roles)
   }
 
-  async attach({ request, response }: HttpContext) {
+  async attach({ request, response, auth }: HttpContext) {
     try {
       const { user_id: userId, role_ids: roleIds } = await attachRoleValidator.validate(
         request.all()
@@ -37,24 +37,14 @@ export default class RolesController {
         return response.notFound({ message: 'Role not found' })
       }
 
-      // Check for existing role attachments
-      const existingRoles = await db
-        .from('user_roles')
-        .where('user_id', userId)
-        .whereIn('role_id', roleIds)
-
-      if (existingRoles.length > 0) {
-        return response.conflict({ message: 'User already has this role' })
-      }
-
       const syncRolesService = await app.container.make(SyncRolesService)
-      await syncRolesService.run({ userId, roleIds })
+      await syncRolesService.run({ actorId: auth.user!.id, userId, roleIds })
 
       return response.json({
         message: 'Role attached successfully',
       })
     } catch (error) {
-      if (error.messages) {
+      if (error && typeof error === 'object' && 'messages' in error) {
         return response.unprocessableEntity({ errors: error.messages })
       }
       throw error

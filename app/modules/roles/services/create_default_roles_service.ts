@@ -1,8 +1,8 @@
 import { inject } from '@adonisjs/core'
-import RolesRepository from '#repositories/roles_repository'
-import IRole from '#interfaces/role_interface'
+import RolesRepository from '#modules/roles/repositories/roles_repository'
+import IRole from '#modules/roles/interfaces/role_interface'
 import { ModelAttributes } from '@adonisjs/lucid/types/model'
-import Role from '#models/role'
+import Role from '#modules/roles/models/role'
 import { TransactionClientContract } from '@adonisjs/lucid/types/database'
 
 export const AvailableRoles = [
