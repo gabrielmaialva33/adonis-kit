@@ -1,11 +1,11 @@
 import { inject } from '@adonisjs/core'
 import { HttpContext } from '@adonisjs/core/http'
 
-import UsersRepository from '#repositories/users_repository'
-import RolesRepository from '#repositories/roles_repository'
+import UsersRepository from '#modules/users/repositories/users_repository'
+import RolesRepository from '#modules/roles/repositories/roles_repository'
 
-import JwtAuthTokensService from '#services/users/jwt_auth_tokens_service'
-import AuthEventService from '#services/users/auth_event_service'
+import JwtAuthTokensService from '#modules/auth/services/jwt_auth_tokens_service'
+import AuthEventService from '#modules/auth/services/auth_event_service'
 
 import NotFoundException from '#exceptions/not_found_exception'
 
@@ -42,7 +42,14 @@ export default class AdminSignInService {
         throw new NotFoundException(i18n.t('errors.permission_denied'))
       }
 
-      const auth = await this.jwtAuthTokensService.run({ userId: user.id })
+      // Active tenant = the user's first tenant (N:N via user_tenants).
+      const tenant = await user.related('tenants').query().first()
+
+      const auth = await this.jwtAuthTokensService.run({
+        userId: user.id,
+        authVersion: user.auth_version,
+        tenantId: tenant?.id,
+      })
       const userJson = user.toJSON()
 
       // Emit login succeeded event
@@ -51,8 +58,9 @@ export default class AdminSignInService {
       return { ...userJson, auth }
     } catch (error) {
       // Emit login failed event if not already emitted
-      if (error.message !== i18n.t('errors.permission_denied')) {
-        AuthEventService.emitLoginFailed(uid, error.message || 'Invalid credentials', ctx)
+      const reason = error instanceof Error ? error.message : 'Invalid credentials'
+      if (reason !== i18n.t('errors.permission_denied')) {
+        AuthEventService.emitLoginFailed(uid, reason || 'Invalid credentials', ctx)
       }
       throw error
     }

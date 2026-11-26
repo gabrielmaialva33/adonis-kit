@@ -2,8 +2,8 @@ import { inject } from '@adonisjs/core'
 import type { HttpContext } from '@adonisjs/core/http'
 import vine from '@vinejs/vine'
 
-import VerifyEmailService from '#services/users/verify_email_service'
-import SendVerificationEmailService from '#services/users/send_verification_email_service'
+import VerifyEmailService from '#modules/auth/services/verify_email_service'
+import SendVerificationEmailService from '#modules/auth/services/send_verification_email_service'
 
 @inject()
 export default class EmailVerificationController {
@@ -45,7 +45,12 @@ export default class EmailVerificationController {
       })
     }
 
-    await this.sendVerificationEmailService.handle(user)
+    const delivered = await this.sendVerificationEmailService.handle(user)
+    if (!delivered) {
+      return response.serviceUnavailable({
+        message: 'Verification email could not be delivered. Please try again later.',
+      })
+    }
 
     return response.ok({
       message: 'Verification email sent successfully',

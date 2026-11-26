@@ -1,5 +1,5 @@
 import type { HttpContext } from '@adonisjs/core/http'
-import type User from '#models/user'
+import type User from '#modules/users/models/user'
 
 /**
  * Authentication event types
@@ -65,6 +65,22 @@ export const AuthEvents = {
   USER_REGISTERED: 'auth:user_registered',
   TOKEN_REFRESHED: 'auth:token_refreshed',
 } as const
+
+/**
+ * Register custom auth events in the framework's EventsList so they are
+ * type-safe when emitted/listened. This merges with the auth-generated
+ * EventsList declared in config/auth.ts.
+ */
+declare module '@adonisjs/core/types' {
+  interface EventsList {
+    'auth:login_attempted': LoginAttemptedEventData
+    'auth:login_succeeded': LoginSucceededEventData
+    'auth:login_failed': LoginFailedEventData
+    'auth:logout': LogoutEventData
+    'auth:user_registered': UserRegisteredEventData
+    'auth:token_refreshed': TokenRefreshedEventData
+  }
+}
 
 /**
  * Helper to extract request metadata from HttpContext
