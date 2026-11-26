@@ -5,8 +5,12 @@ dist
 coverage
 .vscode
 .DS_STORE
-.env
+**/.env
+**/.env.*
+!**/.env.example
 tmp
+# Private local uploads belong to the runtime volume, never the image.
+storage
 
 # Additional .gitignore ignores (any custom file you wish)
 .idea
