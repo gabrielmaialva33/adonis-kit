@@ -13,12 +13,32 @@ import { throttle } from '#start/limiter'
 
 import router from '@adonisjs/core/services/router'
 
-import '#routes/files/index'
-import '#routes/roles/index'
-import '#routes/users/index'
-import '#routes/users/session_routes'
-import '#routes/permissions/index'
-import '#routes/health/index'
+import '#modules/auth/routes'
+import '#modules/users/routes'
+import '#modules/roles/routes'
+import '#modules/permissions/routes'
+import '#modules/files/routes'
+import '#modules/tenants/routes'
+import '#modules/health/routes'
+
+const docsDirectory = join(process.cwd(), 'docs')
+
+router
+  .get('/docs', async ({ response }) => {
+    const html = await readFile(join(docsDirectory, 'redoc.html'), 'utf-8')
+    response.header('content-type', 'text/html; charset=utf-8')
+    return response.send(html)
+  })
+  .as('docs.index')
+  .use(throttle)
+
+router
+  .get('/docs/openapi.yaml', async ({ response }) => {
+    const specification = await readFile(join(docsDirectory, 'openapi.yaml'), 'utf-8')
+    return response.header('content-type', 'application/yaml; charset=utf-8').send(specification)
+  })
+  .as('docs.openapi')
+  .use(throttle)
 
 router
   .get('/version', async () => {
