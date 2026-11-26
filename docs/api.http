@@ -1,29 +1,36 @@
-### Base ACL API HTTP Requests
+### Adonis Kit API HTTP Requests
 ### Base URL: http://localhost:3333
 ###
-### Authentication: Most endpoints require JWT Bearer token
+### Authentication: Bearer by default; explicit HttpOnly cookie mode below.
+### Keep Bearer examples in a cookie-free client. Any unsafe request carrying
+### the access cookie requires CSRF, even when Authorization is also present.
 ### Include header: Authorization: Bearer <token>
 ###
 ### API Conventions:
 ### - Content-Type: application/json (except file uploads)
 ### - Timestamps: ISO 8601 format
 ### - Database fields: snake_case naming
-### - Pagination: ?page=1&perPage=10
-### - Sorting: ?sortBy=field&order=asc|desc
+### - Pagination: ?page=1&per_page=10
+### - Sorting: ?sort_by=field&order=asc|desc
 ### - Search: ?search=term
 
 ### Variables (replace with actual values)
 @baseUrl = http://localhost:3333
-@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsImlhdCI6MTc1MjE5MDY4NywiZXhwIjoxNzUyMTkxNTg3fQ.mN5_LyaxP1nZ46wWjRFVVB26E-0FD9vXJ7J5JlkE8AE
+@token = replace-with-access-token
+@refreshToken = replace-with-current-opaque-refresh-token
+@passwordResetToken = replace-with-opaque-password-reset-token
+@csrfToken = replace-with-csrf-token-from-bootstrap
+@tenantId = 1
 @userId = 3
 @roleId = 3
+@fileId = 1
 
 ###############################################################################
 ### HEALTH ENDPOINTS
 ###############################################################################
 
 ### Get API Information
-GET {{baseUrl}}/
+GET {{baseUrl}}/version
 Accept: application/json
 
 ### Health Check
@@ -77,6 +84,93 @@ Content-Type: application/json
   "password_confirmation": "password123"
 }
 
+### Request Password Reset
+# Always returns the same accepted response, even when the email does not exist.
+POST {{baseUrl}}/api/v1/sessions/forgot-password
+Content-Type: application/json
+
+{
+  "email": "john@example.com"
+}
+
+### Reset Password
+POST {{baseUrl}}/api/v1/sessions/reset-password
+Content-Type: application/json
+
+{
+  "token": "{{passwordResetToken}}",
+  "password": "newpassword123",
+  "password_confirmation": "newpassword123"
+}
+
+### Rotate Refresh Token
+# Replace BOTH credentials after success; serialize refresh calls.
+# Replaying a consumed refresh invalidates the current credential generation.
+POST {{baseUrl}}/api/v1/sessions/refresh
+Content-Type: application/json
+
+{
+  "refresh_token": "{{refreshToken}}"
+}
+
+### Revoke Refresh Token
+# Access JWTs already issued may remain valid until expiry.
+POST {{baseUrl}}/api/v1/sessions/logout
+Content-Type: application/json
+
+{
+  "refresh_token": "{{refreshToken}}"
+}
+
+###############################################################################
+### COOKIE AUTHENTICATION (use a client with a cookie jar)
+###############################################################################
+
+### Bootstrap CSRF before signing in/up with auth_mode=cookie
+# Save response csrf_token as csrfToken and retain session/XSRF cookies.
+# JSON csrf_token goes in X-CSRF-TOKEN. X-XSRF-TOKEN instead takes the
+# XSRF-TOKEN cookie value; do not send the JSON token in that header.
+# Browser fetch requests must use credentials: 'include'.
+GET {{baseUrl}}/api/v1/sessions/csrf
+Accept: application/json
+
+### Sign In and set the signed HttpOnly access cookie
+# Still returns auth.access_token and auth.refresh_token in JSON.
+# Cookie: 15 minutes, HttpOnly, SameSite=Lax, Secure in production, path=/.
+POST {{baseUrl}}/api/v1/sessions/sign-in
+Content-Type: application/json
+X-CSRF-TOKEN: {{csrfToken}}
+
+{
+  "uid": "john@example.com",
+  "password": "password123",
+  "auth_mode": "cookie"
+}
+
+### Read profile using the retained cookie jar
+GET {{baseUrl}}/api/v1/me
+Accept: application/json
+
+### Rotate and update the access cookie
+# Refresh stays explicit JSON; it is never stored in the access cookie.
+POST {{baseUrl}}/api/v1/sessions/refresh
+Content-Type: application/json
+X-CSRF-TOKEN: {{csrfToken}}
+
+{
+  "refresh_token": "{{refreshToken}}",
+  "auth_mode": "cookie"
+}
+
+### Revoke refresh and clear access cookie
+POST {{baseUrl}}/api/v1/sessions/logout
+Content-Type: application/json
+X-CSRF-TOKEN: {{csrfToken}}
+
+{
+  "refresh_token": "{{refreshToken}}"
+}
+
 ###############################################################################
 ### PROFILE ENDPOINTS (Requires Authentication)
 ###############################################################################
@@ -95,6 +189,45 @@ Accept: application/json
 GET {{baseUrl}}/api/v1/me/roles
 Authorization: Bearer {{token}}
 Accept: application/json
+
+### Delete My Account
+# Anonymizes the account and revokes active credentials.
+DELETE {{baseUrl}}/api/v1/me
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "current_password": "password123",
+  "confirmation": "DELETE"
+}
+
+###############################################################################
+### TENANT ENDPOINTS (Requires Authentication)
+###############################################################################
+
+### Create Workspace
+# Requires tenants.create and returns a fresh tenant-scoped token pair.
+POST {{baseUrl}}/api/v1/tenants
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Acme Workspace"
+}
+
+### List My Tenant Memberships
+GET {{baseUrl}}/api/v1/tenants/me
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Switch Active Tenant and Receive a Fresh Token Pair
+POST {{baseUrl}}/api/v1/tenants/switch
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "tenant_id": {{tenantId}}
+}
 
 ###############################################################################
 ### EMAIL VERIFICATION ENDPOINTS
@@ -121,12 +254,12 @@ Authorization: Bearer {{token}}
 Accept: application/json
 
 ### List Users with Pagination
-GET {{baseUrl}}/api/v1/users?page=1&perPage=20
+GET {{baseUrl}}/api/v1/users?page=1&per_page=20
 Authorization: Bearer {{token}}
 Accept: application/json
 
 ### List Users with Sorting
-GET {{baseUrl}}/api/v1/users?sortBy=created_at&order=desc
+GET {{baseUrl}}/api/v1/users?sort_by=created_at&order=desc
 Authorization: Bearer {{token}}
 Accept: application/json
 
@@ -140,7 +273,7 @@ GET {{baseUrl}}/api/v1/users/{{userId}}
 Authorization: Bearer {{token}}
 Accept: application/json
 
-### Create User (Requires USER role)
+### Create User (Requires users.create permission)
 POST {{baseUrl}}/api/v1/users
 Authorization: Bearer {{token}}
 Content-Type: application/json
@@ -187,7 +320,7 @@ Authorization: Bearer {{token}}
 Accept: application/json
 
 ### List Roles with Pagination
-GET {{baseUrl}}/api/v1/admin/roles?page=1&perPage=10
+GET {{baseUrl}}/api/v1/admin/roles?page=1&per_page=10
 Authorization: Bearer {{token}}
 Accept: application/json
 
@@ -310,12 +443,19 @@ Content-Type: application/json
 ### FILE MANAGEMENT ENDPOINTS (Requires Authentication)
 ###############################################################################
 
+### List Workspace Files
+GET {{baseUrl}}/api/v1/files?page=1&per_page=20
+Authorization: Bearer {{token}}
+x-tenant-id: {{tenantId}}
+Accept: application/json
+
 ### Upload File
-# Maximum size: 5MB
+# Maximum size: 10MB
 # Allowed extensions: jpeg, jpg, png, pdf, doc, docx, txt, csv, xls, xlsx, mp3, mp4, zip
 # File is automatically categorized: image, document, video, audio, file
 POST {{baseUrl}}/api/v1/files/upload
 Authorization: Bearer {{token}}
+x-tenant-id: {{tenantId}}
 Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
 
 ------WebKitFormBoundary7MA4YWxkTrZu0gW
@@ -328,6 +468,7 @@ Content-Type: application/pdf
 ### Upload Image
 POST {{baseUrl}}/api/v1/files/upload
 Authorization: Bearer {{token}}
+x-tenant-id: {{tenantId}}
 Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
 
 ------WebKitFormBoundary7MA4YWxkTrZu0gW
@@ -336,6 +477,17 @@ Content-Type: image/jpeg
 
 < ./photo.jpg
 ------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+### Download Private Workspace File
+# URL identifies the tenant; requires active membership and files.read.
+GET {{baseUrl}}/api/v1/files/{{tenantId}}/{{fileId}}/download
+Authorization: Bearer {{token}}
+
+### Delete Workspace File
+# files.delete deletes any workspace file; files.delete.own only deletes the uploader's file.
+DELETE {{baseUrl}}/api/v1/files/{{fileId}}
+Authorization: Bearer {{token}}
+x-tenant-id: {{tenantId}}
 
 ###############################################################################
 ### EXAMPLE RESPONSES
@@ -372,7 +524,7 @@ Content-Type: image/jpeg
 #   "roles": [...],
 #   "auth": {
 #     "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-#     "refresh_token": "refresh_token_string"
+#     "refresh_token": "opaque_random_refresh_token"
 #   }
 # }
 
@@ -394,7 +546,7 @@ Content-Type: image/jpeg
 
 ### Success Response - File Upload
 # {
-#   "url": "https://storage.example.com/files/abc123.pdf",
+#   "url": "/api/v1/files/1/10/download",
 #   "clientName": "document.pdf",
 #   "fileCategory": "document",
 #   "fileType": "application/pdf",

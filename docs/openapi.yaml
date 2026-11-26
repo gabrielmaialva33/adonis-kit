@@ -1,79 +1,45 @@
 openapi: 3.1.0
 info:
-  title: Base ACL API
-  version: 1.0.0
-  description: |
-    ## Welcome to Base ACL API
+  title: Adonis Kit API
+  version: 0.9.0
+  description: |-
+    AdonisJS 7 API with global RBAC, N:N tenant workspaces, private files and account lifecycle endpoints.
 
-    A robust authentication and access control API built with AdonisJS v6. This API provides comprehensive user management, role-based access control, and file management capabilities.
+    Bearer authentication is the default: sign-in/sign-up return auth.access_token and auth.refresh_token. Access JWTs last 15 minutes; opaque refresh credentials last 3 days. Refresh rotates both credentials transactionally. Serialize refresh requests and replace both values; replay of a consumed refresh credential invalidates the current credential generation. Password changes/reset and account deletion invalidate prior credentials. Logout revokes the submitted refresh credential; an issued Bearer JWT can remain valid until expiry.
 
-    ### Key Features
+    For HttpOnly cookie authentication, first GET /api/v1/sessions/csrf, retain the session/XSRF cookies and send the returned csrf_token in X-CSRF-TOKEN. Send auth_mode: cookie on sign-in, sign-up or refresh. Cookie mode still returns the auth pair in JSON and stores only the access JWT in a signed HttpOnly cookie (15 minutes, SameSite=Lax, path=/, Secure in production). Refresh/logout still require refresh_token in JSON. Cookie-mode issuance requires CSRF before an access cookie exists. Any unsafe request carrying an access cookie requires CSRF even if Authorization is also sent. Use a cookie-free client for pure Bearer requests.
 
-    - **JWT Authentication**: Secure token-based authentication with refresh tokens
-    - **Role-Based Access Control**: Fine-grained permissions with multiple user roles
-    - **User Management**: Complete CRUD operations for user accounts
-    - **File Management**: Secure file upload with automatic categorization
-    - **Health Monitoring**: Built-in health check endpoints
+    Production cookie clients require a public HTTPS API origin (APP_URL), trusted proxy configuration for the actual deployment topology, an explicit credentialed CORS origin allowlist, and browser credentials enabled. CORS does not override SameSite=Lax. The bootstrap JSON token goes in X-CSRF-TOKEN; the alternative X-XSRF-TOKEN header takes the XSRF-TOKEN cookie value.
 
-    ## Authentication
+    Tenant context resolves x-tenant-id, then the verified JWT tenantId, then the first active membership; active membership is always checked. Users, roles, permissions and audit records are global. File reads/writes are tenant-scoped. File URLs are relative authenticated download paths, never public storage links.
 
-    The API uses JWT Bearer authentication. To access protected endpoints:
-
-    1. **Login**: POST to `/api/v1/sessions/sign-in` with your credentials
-    2. **Get Token**: Extract the `access_token` from the response
-    3. **Use Token**: Include `Authorization: Bearer <token>` in all requests
-
-    ### Token Management
-
-    - **Access Token Lifetime**: 1 hour
-    - **Refresh Token Lifetime**: 3 days
-    - **Token Format**: JWT Bearer token
-
-    ## API Conventions
-
-    ### Request Format
-    - **Content-Type**: `application/json` for all requests (except file uploads)
-    - **Pagination**: Use `?page=1&perPage=10` query parameters
-    - **Sorting**: Use `?sortBy=field&order=asc` or `?sortBy=field&order=desc`
-    - **Searching**: Use `?search=term` for text search
-
-    ### Response Format
-    - **Success**: HTTP 2xx with JSON body
-    - **Errors**: HTTP 4xx/5xx with standardized error format
-    - **Timestamps**: ISO 8601 format
-    - **Database Fields**: snake_case naming convention
-
-    ### Common Headers
-    ```
-    Authorization: Bearer <token>
-    Content-Type: application/json
-    Accept: application/json
-    ```
-
+    Use application/json except multipart file uploads. User field names are snake_case; the upload response retains camelCase fields. Internal user metadata and credential generations are not public. See MIGRATION.md for changes from the previous API.
   contact:
-    name: API Support
-    email: support@example.com
+    name: Adonis Kit issues
+    url: https://github.com/gabrielmaialva33/adonis-kit/issues
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
-
 servers:
-  - url: http://127.0.0.1:3333
-    description: Local development server
-  - url: https://api.yourdomain.com
-    description: Production server
-
+  - url: http://localhost:3333
+    description: Local development API; replace with your deployment origin
 security:
   - bearerAuth: []
-
+  - cookieAuth: []
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: JWT authentication token
-
+      description: Short-lived access JWT. Opaque refresh tokens are never accepted here.
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: token
+      description:
+        Signed HttpOnly access JWT cookie (default JWT_COOKIE_NAME). Cookie-bearing unsafe requests also
+        require the session-bound X-CSRF-TOKEN header, even when Authorization is present.
   schemas:
     User:
       type: object
@@ -81,16 +47,28 @@ components:
         id:
           type: integer
           example: 1
+          minimum: 1
+          maximum: 9007199254740991
         full_name:
           type: string
-          example: 'John Doe'
+          example: John Doe
         email:
           type: string
           format: email
-          example: 'john@example.com'
+          example: john@example.com
         username:
-          type: string
-          example: 'johndoe'
+          type:
+            - string
+            - 'null'
+          example: johndoe
+        email_verified:
+          type: boolean
+          example: true
+        email_verified_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
         created_at:
           type: string
           format: date-time
@@ -103,35 +81,42 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Role'
-
     Role:
       type: object
       properties:
         id:
           type: integer
           example: 1
+          minimum: 1
+          maximum: 9007199254740991
         name:
           type: string
-          example: 'User'
+          example: User
         description:
           type: string
-          example: 'Regular user role'
+          example: Regular user role
         slug:
           type: string
-          enum: [root, admin, user, guest]
-          example: 'user'
+          enum:
+            - root
+            - admin
+            - user
+            - guest
+            - editor
+          example: user
         created_at:
           type: string
           format: date-time
         updated_at:
           type: string
           format: date-time
-
     AuthResponse:
       type: object
       properties:
         id:
           type: integer
+          minimum: 1
+          maximum: 9007199254740991
         full_name:
           type: string
         email:
@@ -150,15 +135,137 @@ components:
           items:
             $ref: '#/components/schemas/Role'
         auth:
+          $ref: '#/components/schemas/AuthTokens'
+        email_verification_sent:
+          type: boolean
+          description: Present on sign-up responses; false means the account was created but email delivery failed.
+    AuthTokens:
+      type: object
+      required:
+        - access_token
+        - refresh_token
+      properties:
+        access_token:
+          type: string
+          description: Short-lived JWT accepted by bearer-authenticated endpoints.
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        refresh_token:
+          type: string
+          description: Opaque one-time refresh credential rotated after every successful refresh.
+          example: D4m6j6pTW1u3Jf_Z0Q4K7rJch7Jv8k9xQ4Q6xk2MsGv...
+    RefreshTokenRequest:
+      type: object
+      required:
+        - refresh_token
+      properties:
+        refresh_token:
+          type: string
+          minLength: 32
+          description: Opaque refresh token returned by sign-in, sign-up, tenant switch, or refresh.
+        auth_mode:
+          type: string
+          enum: &id001
+            - bearer
+            - cookie
+          default: bearer
+          description:
+            cookie also writes a signed HttpOnly access JWT cookie and requires CSRF. Both modes return
+            the auth pair in JSON; refresh remains explicit.
+    PasswordResetRequest:
+      type: object
+      required:
+        - token
+        - password
+        - password_confirmation
+      properties:
+        token:
+          type: string
+          minLength: 32
+          description: Opaque single-use password reset token delivered by email.
+        password:
+          type: string
+          format: password
+          minLength: 8
+        password_confirmation:
+          type: string
+          format: password
+          minLength: 8
+    Tenant:
+      type: object
+      required:
+        - id
+        - name
+        - slug
+        - role
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          maximum: 9007199254740991
+        name:
+          type: string
+        slug:
+          type: string
+        is_active:
+          type: boolean
+        role:
+          type: string
+          enum:
+            - owner
+            - admin
+            - member
+    FileListItem:
+      type: object
+      required:
+        - id
+        - client_name
+        - file_name
+        - file_size
+        - file_type
+        - file_category
+        - url
+        - owner
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          maximum: 9007199254740991
+        client_name:
+          type: string
+        file_name:
+          type: string
+        file_size:
+          type: integer
+        file_type:
+          type: string
+        file_category:
+          type: string
+          enum:
+            - image
+            - document
+            - video
+            - audio
+            - file
+        url:
+          type: string
+          description: Relative authenticated API download URL, not a public storage URL.
+        owner:
           type: object
+          required:
+            - id
+            - full_name
           properties:
-            access_token:
+            id:
+              type: integer
+              minimum: 1
+              maximum: 9007199254740991
+            full_name:
               type: string
-              example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
-            refresh_token:
-              type: string
-              example: 'refresh_token_string'
-
+        created_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
     Error:
       type: object
       properties:
@@ -169,14 +276,13 @@ components:
             properties:
               message:
                 type: string
-                example: 'Validation error'
+                example: Validation error
               field:
                 type: string
-                example: 'email'
+                example: email
               rule:
                 type: string
-                example: 'email'
-
+                example: email
     Pagination:
       type: object
       properties:
@@ -200,40 +306,44 @@ components:
               example: 1
             first_page_url:
               type: string
-              example: '/?page=1'
+              example: /?page=1
             last_page_url:
               type: string
-              example: '/?page=10'
+              example: /?page=10
             next_page_url:
               type: string
-              example: '/?page=2'
+              example: /?page=2
             previous_page_url:
               type: string
               example: null
-
     FileUploadResponse:
       type: object
       properties:
         url:
           type: string
-          example: 'https://storage.example.com/files/abc123.pdf'
+          example: /api/v1/files/1/10/download
+          description: Relative authenticated download URL; requires files.read and active membership in its tenant.
         clientName:
           type: string
-          example: 'document.pdf'
+          example: document.pdf
         fileCategory:
           type: string
-          enum: [image, document, video, audio, file]
-          example: 'document'
+          enum:
+            - image
+            - document
+            - video
+            - audio
+            - file
+          example: document
         fileType:
           type: string
-          example: 'application/pdf'
+          example: application/pdf
         size:
           type: integer
           example: 12345
         extname:
           type: string
-          example: 'pdf'
-
+          example: pdf
   parameters:
     pathId:
       name: id
@@ -241,8 +351,9 @@ components:
       required: true
       schema:
         type: integer
+        minimum: 1
+        maximum: 9007199254740991
       description: Resource ID
-
     pageParam:
       name: page
       in: query
@@ -251,9 +362,8 @@ components:
         default: 1
         minimum: 1
       description: Page number for pagination
-
     perPageParam:
-      name: perPage
+      name: per_page
       in: query
       schema:
         type: integer
@@ -261,31 +371,47 @@ components:
         minimum: 1
         maximum: 100
       description: Number of items per page
-
     sortByParam:
-      name: sortBy
+      name: sort_by
       in: query
       schema:
         type: string
         default: id
       description: Field to sort by
-
     orderParam:
       name: order
       in: query
       schema:
         type: string
-        enum: [asc, desc]
+        enum:
+          - asc
+          - desc
         default: asc
       description: Sort order
-
     searchParam:
       name: search
       in: query
       schema:
         type: string
       description: Search term for filtering results
-
+    tenantHeader:
+      name: x-tenant-id
+      in: header
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 9007199254740991
+      description: Optional active workspace override. Membership and active status are always validated.
+    csrfHeader:
+      name: X-CSRF-TOKEN
+      in: header
+      required: false
+      description:
+        Required for cookie-mode issuance and every unsafe request carrying the access cookie. Bootstrap
+        via GET /api/v1/sessions/csrf and preserve session/XSRF cookies.
+      schema:
+        type: string
   responses:
     UnauthorizedError:
       description: Authentication required
@@ -295,8 +421,7 @@ components:
             $ref: '#/components/schemas/Error'
           example:
             errors:
-              - message: 'Unauthorized'
-
+              - message: Unauthorized
     ForbiddenError:
       description: Insufficient permissions
       content:
@@ -305,8 +430,7 @@ components:
             $ref: '#/components/schemas/Error'
           example:
             errors:
-              - message: 'Forbidden'
-
+              - message: Forbidden
     NotFoundError:
       description: Resource not found
       content:
@@ -315,15 +439,13 @@ components:
             $ref: '#/components/schemas/Error'
           example:
             errors:
-              - message: 'Resource not found'
-
+              - message: Resource not found
     ValidationError:
       description: Validation failed
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
-
 tags:
   - name: Health
     description: System health monitoring endpoints
@@ -331,6 +453,8 @@ tags:
     description: User authentication and session management
   - name: Users
     description: User management operations
+  - name: Tenants
+    description: Tenant membership and active workspace operations
   - name: Roles
     description: Role management operations (admin only)
   - name: Files
@@ -339,9 +463,8 @@ tags:
     description: Current user profile operations
   - name: Permissions
     description: Permission management operations (admin only)
-
 paths:
-  /:
+  /version:
     get:
       operationId: getApiInfo
       summary: Get API information
@@ -359,16 +482,16 @@ paths:
                 properties:
                   name:
                     type: string
-                    example: 'adonis-kit'
+                    example: adonis-kit
                   description:
                     type: string
-                    example: 'Base ACL API built with AdonisJS'
+                    example: Modular AdonisJS 7 API starter with tenant workspaces and private files
                   version:
                     type: string
-                    example: '0.0.0'
+                    example: 0.9.0
                   author:
                     type: string
-                    example: 'Gabriel Maia'
+                    example: Gabriel Maia
                   contributors:
                     type: array
                     items:
@@ -379,7 +502,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-
   /api/v1/health:
     get:
       operationId: healthCheck
@@ -426,12 +548,14 @@ paths:
                     example: false
                   services:
                     type: object
-
   /api/v1/sessions/sign-in:
     post:
       operationId: signIn
       summary: User login
-      description: Authenticate a user and receive JWT tokens
+      description:
+        Authenticate a user and receive a short-lived access JWT plus an opaque rotating refresh token.
+        Set auth_mode=cookie to additionally issue the HttpOnly access cookie; bootstrap CSRF first. Both modes
+        return the auth pair.
       tags:
         - Authentication
       security: []
@@ -448,12 +572,18 @@ paths:
                 uid:
                   type: string
                   description: Email or username
-                  example: 'john@example.com'
+                  example: john@example.com
                 password:
                   type: string
                   format: password
-                  minLength: 6
-                  example: 'password123'
+                  example: password123
+                auth_mode:
+                  type: string
+                  enum: *id001
+                  default: bearer
+                  description:
+                    cookie also writes a signed HttpOnly access JWT cookie and requires CSRF. Both modes
+                    return the auth pair in JSON; refresh remains explicit.
       responses:
         '200':
           description: Login successful
@@ -461,7 +591,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthResponse'
-        '401':
+        '400':
           description: Invalid credentials
           content:
             application/json:
@@ -469,10 +599,139 @@ paths:
                 $ref: '#/components/schemas/Error'
               example:
                 errors:
-                  - message: 'Invalid credentials'
+                  - message: Invalid credentials
         '422':
           $ref: '#/components/responses/ValidationError'
-
+      parameters:
+        - $ref: '#/components/parameters/csrfHeader'
+  /api/v1/sessions/forgot-password:
+    post:
+      operationId: requestPasswordReset
+      summary: Request a password reset link
+      description:
+        Returns the same accepted response whether or not the email exists. Any issued token is opaque,
+        single-use, and stored only as an HMAC.
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '202':
+          description: Request accepted without revealing account existence
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          description: Too many password reset requests
+      parameters:
+        - $ref: '#/components/parameters/csrfHeader'
+  /api/v1/sessions/reset-password:
+    post:
+      operationId: resetPassword
+      summary: Reset an account password
+      description:
+        Consumes a valid reset token, changes the password, invalidates other reset links, and revokes
+        active API refresh tokens.
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequest'
+      responses:
+        '200':
+          description: Password reset successfully
+        '400':
+          description: Invalid or expired token
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          description: Too many password reset attempts
+      parameters:
+        - $ref: '#/components/parameters/csrfHeader'
+  /api/v1/sessions/refresh:
+    post:
+      operationId: refreshSession
+      summary: Rotate a refresh token
+      description:
+        Atomically consumes the opaque refresh token and returns a new auth pair. Store both replacements
+        and serialize refresh calls. Replaying a consumed token invalidates the current credential generation. auth_mode=cookie
+        also replaces the access cookie and requires CSRF.
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenRequest'
+      responses:
+        '200':
+          description: Token pair rotated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  auth:
+                    $ref: '#/components/schemas/AuthTokens'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+      parameters:
+        - $ref: '#/components/parameters/csrfHeader'
+  /api/v1/sessions/logout:
+    post:
+      operationId: revokeSession
+      summary: Revoke an API refresh token
+      description:
+        Revokes the submitted opaque refresh token and clears the access cookie. Repeated revocation
+        is idempotent. Existing Bearer access JWTs may remain valid until expiry. Requests carrying an access cookie
+        require CSRF.
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refresh_token
+              properties:
+                refresh_token:
+                  type: string
+                  minLength: 32
+      responses:
+        '204':
+          description: Refresh token revoked
+        '422':
+          $ref: '#/components/responses/ValidationError'
+      parameters:
+        - $ref: '#/components/parameters/csrfHeader'
   /api/v1/me:
     get:
       operationId: getProfile
@@ -489,7 +748,41 @@ paths:
                 $ref: '#/components/schemas/User'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
-
+    delete:
+      operationId: deleteOwnAccount
+      summary: Delete the authenticated account
+      description:
+        Requires the current password and the literal confirmation DELETE. The user is anonymized and
+        active API credentials are revoked while historical references remain intact.
+      tags:
+        - Profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - current_password
+                - confirmation
+              properties:
+                current_password:
+                  type: string
+                  format: password
+                confirmation:
+                  type: string
+                  const: DELETE
+      responses:
+        '204':
+          description: Account anonymized and credentials revoked
+        '400':
+          description: Incorrect password or confirmation
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+      parameters:
+        - $ref: '#/components/parameters/csrfHeader'
   /api/v1/me/permissions:
     get:
       operationId: getMyPermissions
@@ -509,10 +802,9 @@ paths:
                     type: array
                     items:
                       type: string
-                      example: 'users.create'
+                      example: users.create
         '401':
           $ref: '#/components/responses/UnauthorizedError'
-
   /api/v1/me/roles:
     get:
       operationId: getMyRoles
@@ -534,12 +826,15 @@ paths:
                       $ref: '#/components/schemas/Role'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
-
   /api/v1/sessions/sign-up:
     post:
       operationId: signUp
       summary: User registration
-      description: Create a new user account
+      description:
+        Creates a user, assigns the default role, optionally creates a personal workspace according to
+        `REGISTRATION_WORKSPACE_MODE`, and returns tenant-scoped API tokens. Email delivery failure does not roll
+        back the account. Set auth_mode=cookie to additionally issue the HttpOnly access cookie; bootstrap CSRF
+        first. Both modes return the auth pair.
       tags:
         - Authentication
       security: []
@@ -557,24 +852,36 @@ paths:
               properties:
                 full_name:
                   type: string
-                  example: 'John Doe'
+                  example: John Doe
+                  maxLength: 255
                 email:
                   type: string
                   format: email
-                  example: 'john@example.com'
+                  example: john@example.com
+                  maxLength: 254
+                  description: Trimmed and lowercased.
                 username:
                   type: string
-                  example: 'johndoe'
-                  description: Optional username
+                  example: johndoe
+                  description: Optional; trimmed and lowercased. Generated when omitted.
+                  minLength: 3
+                  maxLength: 80
                 password:
                   type: string
                   format: password
-                  minLength: 6
-                  example: 'password123'
+                  minLength: 8
+                  example: password123
                 password_confirmation:
                   type: string
                   format: password
-                  example: 'password123'
+                  example: password123
+                auth_mode:
+                  type: string
+                  enum: *id001
+                  default: bearer
+                  description:
+                    cookie also writes a signed HttpOnly access JWT cookie and requires CSRF. Both modes
+                    return the auth pair in JSON; refresh remains explicit.
       responses:
         '201':
           description: Registration successful
@@ -584,7 +891,8 @@ paths:
                 $ref: '#/components/schemas/AuthResponse'
         '422':
           $ref: '#/components/responses/ValidationError'
-
+      parameters:
+        - $ref: '#/components/parameters/csrfHeader'
   /api/v1/verify-email:
     get:
       operationId: verifyEmail
@@ -605,7 +913,6 @@ paths:
           description: Email verified successfully
         '400':
           description: Invalid or expired token
-
   /api/v1/resend-verification-email:
     post:
       operationId: resendVerificationEmail
@@ -618,7 +925,131 @@ paths:
           description: Verification email sent successfully
         '401':
           $ref: '#/components/responses/UnauthorizedError'
-
+        '503':
+          description: Verification email could not be delivered
+      parameters:
+        - $ref: '#/components/parameters/csrfHeader'
+  /api/v1/tenants:
+    post:
+      operationId: createTenant
+      summary: Create a workspace
+      description:
+        Creates an active workspace, adds the authenticated user as owner, and returns a token pair carrying
+        the new tenant id. Requires `tenants.create`. Cookie-authenticated requests also update the access cookie
+        and require CSRF.
+      tags:
+        - Tenants
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  minLength: 2
+                  maxLength: 120
+                  example: Acme Workspace
+      responses:
+        '201':
+          description: Workspace created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tenant:
+                    $ref: '#/components/schemas/Tenant'
+                  auth:
+                    $ref: '#/components/schemas/AuthTokens'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+      parameters:
+        - $ref: '#/components/parameters/csrfHeader'
+  /api/v1/tenants/me:
+    get:
+      operationId: listMyTenants
+      summary: List the authenticated user's tenant memberships
+      tags:
+        - Tenants
+      responses:
+        '200':
+          description: Tenant memberships retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                          minimum: 1
+                          maximum: 9007199254740991
+                        name:
+                          type: string
+                        slug:
+                          type: string
+                        is_active:
+                          type: boolean
+                        role:
+                          type: string
+                          enum:
+                            - owner
+                            - admin
+                            - member
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+  /api/v1/tenants/switch:
+    post:
+      operationId: switchTenant
+      summary: Switch the active API tenant
+      description:
+        Validates active membership and issues a fresh access/refresh pair carrying the selected tenant.
+        Cookie-authenticated requests also update the access cookie and require CSRF.
+      tags:
+        - Tenants
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - tenant_id
+              properties:
+                tenant_id:
+                  type: integer
+                  minimum: 1
+                  maximum: 9007199254740991
+      responses:
+        '200':
+          description: Active tenant switched
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tenant:
+                    type: object
+                  auth:
+                    $ref: '#/components/schemas/AuthTokens'
+        '400':
+          description: Invalid tenant id
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+      parameters:
+        - $ref: '#/components/parameters/csrfHeader'
   /api/v1/users:
     get:
       operationId: listUsers
@@ -648,11 +1079,10 @@ paths:
                           $ref: '#/components/schemas/User'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
-
     post:
       operationId: createUser
       summary: Create user
-      description: Create a new user account (requires USER role)
+      description: Create a new user account (requires the global `users.create` permission)
       tags:
         - Users
       requestBody:
@@ -669,15 +1099,21 @@ paths:
               properties:
                 full_name:
                   type: string
+                  maxLength: 255
                 email:
                   type: string
                   format: email
+                  maxLength: 254
+                  description: Trimmed and lowercased.
                 username:
                   type: string
+                  minLength: 3
+                  maxLength: 80
+                  description: Optional; trimmed and lowercased. Generated when omitted.
                 password:
                   type: string
                   format: password
-                  minLength: 6
+                  minLength: 8
                 password_confirmation:
                   type: string
                   format: password
@@ -692,7 +1128,8 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '422':
           $ref: '#/components/responses/ValidationError'
-
+      parameters:
+        - $ref: '#/components/parameters/csrfHeader'
   /api/v1/users/{id}:
     get:
       operationId: getUserById
@@ -713,15 +1150,17 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '404':
           $ref: '#/components/responses/NotFoundError'
-
     put:
       operationId: updateUser
       summary: Update user
-      description: Update user details (email and username cannot be changed)
+      description:
+        Update full_name or confirmed password; email and username cannot be changed here. A non-ROOT
+        actor cannot modify a protected equal/higher privileged account. Password changes invalidate earlier credentials.
       tags:
         - Users
       parameters:
         - $ref: '#/components/parameters/pathId'
+        - $ref: '#/components/parameters/csrfHeader'
       requestBody:
         required: true
         content:
@@ -734,7 +1173,7 @@ paths:
                 password:
                   type: string
                   format: password
-                  minLength: 6
+                  minLength: 8
                 password_confirmation:
                   type: string
                   format: password
@@ -752,15 +1191,17 @@ paths:
           $ref: '#/components/responses/NotFoundError'
         '422':
           $ref: '#/components/responses/ValidationError'
-
     delete:
       operationId: deleteUser
       summary: Delete user
-      description: Soft delete a user (marks as deleted)
+      description:
+        Soft delete a user and invalidate credentials. A non-ROOT actor cannot delete a protected equal/higher
+        privileged account.
       tags:
         - Users
       parameters:
         - $ref: '#/components/parameters/pathId'
+        - $ref: '#/components/parameters/csrfHeader'
       responses:
         '204':
           description: User deleted successfully
@@ -768,7 +1209,6 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '404':
           $ref: '#/components/responses/NotFoundError'
-
   /api/v1/admin/roles:
     get:
       operationId: listRoles
@@ -797,12 +1237,13 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
-
   /api/v1/admin/roles/attach:
     put:
       operationId: attachRoles
       summary: Attach roles to user
-      description: Assign roles to a user (requires ADMIN or ROOT role)
+      description:
+        Attach roles additively, preserving existing assignments. Non-ROOT actors may delegate only permitted
+        lower roles and cannot manage protected equal/higher privileged accounts.
       tags:
         - Roles
       requestBody:
@@ -818,11 +1259,18 @@ paths:
                 user_id:
                   type: integer
                   example: 1
+                  minimum: 1
+                  maximum: 9007199254740991
                 role_ids:
                   type: array
                   items:
                     type: integer
-                  example: [1, 2, 3]
+                    minimum: 1
+                    maximum: 9007199254740991
+                  example:
+                    - 1
+                    - 2
+                    - 3
       responses:
         '200':
           description: Roles attached successfully
@@ -833,14 +1281,15 @@ paths:
                 properties:
                   message:
                     type: string
-                    example: 'Role attached successfully'
+                    example: Role attached successfully
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
         '422':
           $ref: '#/components/responses/ValidationError'
-
+      parameters:
+        - $ref: '#/components/parameters/csrfHeader'
   /api/v1/admin/permissions:
     get:
       operationId: listPermissions
@@ -876,13 +1325,13 @@ paths:
               properties:
                 resource:
                   type: string
-                  example: 'posts'
+                  example: posts
                 action:
                   type: string
-                  example: 'create'
+                  example: create
                 description:
                   type: string
-                  example: 'Allow creating posts'
+                  example: Allow creating posts
       responses:
         '201':
           description: Permission created successfully
@@ -892,12 +1341,15 @@ paths:
           $ref: '#/components/responses/ForbiddenError'
         '422':
           $ref: '#/components/responses/ValidationError'
-
+      parameters:
+        - $ref: '#/components/parameters/csrfHeader'
   /api/v1/admin/roles/permissions/sync:
     put:
       operationId: syncRolePermissions
       summary: Sync role permissions
-      description: Sync all permissions for a specific role
+      description:
+        Sync all permissions for a specific role Permission assignment additionally requires a persisted
+        ROOT actor.
       tags:
         - Permissions
       requestBody:
@@ -913,11 +1365,18 @@ paths:
                 role_id:
                   type: integer
                   example: 2
+                  minimum: 1
+                  maximum: 9007199254740991
                 permission_ids:
                   type: array
                   items:
                     type: integer
-                  example: [1, 2, 3]
+                    minimum: 1
+                    maximum: 9007199254740991
+                  example:
+                    - 1
+                    - 2
+                    - 3
       responses:
         '200':
           description: Permissions synced successfully
@@ -927,12 +1386,15 @@ paths:
           $ref: '#/components/responses/ForbiddenError'
         '422':
           $ref: '#/components/responses/ValidationError'
-
+      parameters:
+        - $ref: '#/components/parameters/csrfHeader'
   /api/v1/admin/roles/permissions/attach:
     put:
       operationId: attachRolePermissions
       summary: Attach permissions to role
-      description: Attach one or more permissions to a role
+      description:
+        Attach one or more permissions to a role Permission assignment additionally requires a persisted
+        ROOT actor.
       tags:
         - Permissions
       requestBody:
@@ -948,11 +1410,17 @@ paths:
                 role_id:
                   type: integer
                   example: 2
+                  minimum: 1
+                  maximum: 9007199254740991
                 permission_ids:
                   type: array
                   items:
                     type: integer
-                  example: [4, 5]
+                    minimum: 1
+                    maximum: 9007199254740991
+                  example:
+                    - 4
+                    - 5
       responses:
         '200':
           description: Permissions attached successfully
@@ -962,12 +1430,15 @@ paths:
           $ref: '#/components/responses/ForbiddenError'
         '422':
           $ref: '#/components/responses/ValidationError'
-
+      parameters:
+        - $ref: '#/components/parameters/csrfHeader'
   /api/v1/admin/roles/permissions/detach:
     put:
       operationId: detachRolePermissions
       summary: Detach permissions from role
-      description: Detach one or more permissions from a role
+      description:
+        Detach one or more permissions from a role Permission assignment additionally requires a persisted
+        ROOT actor.
       tags:
         - Permissions
       requestBody:
@@ -983,11 +1454,16 @@ paths:
                 role_id:
                   type: integer
                   example: 2
+                  minimum: 1
+                  maximum: 9007199254740991
                 permission_ids:
                   type: array
                   items:
                     type: integer
-                  example: [1]
+                    minimum: 1
+                    maximum: 9007199254740991
+                  example:
+                    - 1
       responses:
         '200':
           description: Permissions detached successfully
@@ -997,12 +1473,15 @@ paths:
           $ref: '#/components/responses/ForbiddenError'
         '422':
           $ref: '#/components/responses/ValidationError'
-
+      parameters:
+        - $ref: '#/components/parameters/csrfHeader'
   /api/v1/admin/users/permissions/sync:
     put:
       operationId: syncUserPermissions
       summary: Sync user permissions
-      description: Sync all direct permissions for a specific user
+      description:
+        Sync all direct permissions for a specific user Permission assignment additionally requires a
+        persisted ROOT actor.
       tags:
         - Permissions
       requestBody:
@@ -1018,11 +1497,17 @@ paths:
                 user_id:
                   type: integer
                   example: 3
+                  minimum: 1
+                  maximum: 9007199254740991
                 permission_ids:
                   type: array
                   items:
                     type: integer
-                  example: [10, 11]
+                    minimum: 1
+                    maximum: 9007199254740991
+                  example:
+                    - 10
+                    - 11
       responses:
         '200':
           description: User permissions synced successfully
@@ -1032,7 +1517,8 @@ paths:
           $ref: '#/components/responses/ForbiddenError'
         '422':
           $ref: '#/components/responses/ValidationError'
-
+      parameters:
+        - $ref: '#/components/parameters/csrfHeader'
   /api/v1/admin/users/{id}/permissions:
     get:
       operationId: getUserPermissions
@@ -1049,7 +1535,6 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
-
   /api/v1/admin/users/{id}/permissions/check:
     post:
       operationId: checkUserPermissions
@@ -1059,6 +1544,7 @@ paths:
         - Permissions
       parameters:
         - $ref: '#/components/parameters/pathId'
+        - $ref: '#/components/parameters/csrfHeader'
       requestBody:
         required: true
         content:
@@ -1072,7 +1558,9 @@ paths:
                   type: array
                   items:
                     type: string
-                  example: ['users.create', 'files.delete']
+                  example:
+                    - users.create
+                    - files.delete
       responses:
         '200':
           description: Check result
@@ -1082,26 +1570,75 @@ paths:
           $ref: '#/components/responses/ForbiddenError'
         '422':
           $ref: '#/components/responses/ValidationError'
-
+  /api/v1/files:
+    get:
+      operationId: listFiles
+      summary: List files in the active workspace
+      description: Returns a paginated tenant-scoped file list. Requires `files.list` and an active workspace.
+      tags:
+        - Files
+      parameters:
+        - $ref: '#/components/parameters/tenantHeader'
+        - $ref: '#/components/parameters/pageParam'
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Workspace file list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  meta:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      perPage:
+                        type: integer
+                      currentPage:
+                        type: integer
+                      lastPage:
+                        type: integer
+                      firstPage:
+                        type: integer
+                      nextPageUrl:
+                        type:
+                          - string
+                          - 'null'
+                      previousPageUrl:
+                        type:
+                          - string
+                          - 'null'
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FileListItem'
+        '400':
+          description: An active workspace is required or the tenant header is malformed
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
   /api/v1/files/upload:
     post:
       operationId: uploadFile
       summary: Upload file
-      description: |
-        Upload a file to the server. Files are automatically categorized based on their type.
-
-        **File constraints:**
-        - Maximum size: 5MB
-        - Allowed extensions: jpeg, jpg, png, pdf, doc, docx, txt, csv, xls, xlsx, mp3, mp4, zip
-
-        **Categories:**
-        - `image`: jpeg, jpg, png
-        - `document`: pdf, doc, docx, txt
-        - `video`: mp4
-        - `audio`: mp3
-        - `file`: csv, xls, xlsx, zip, and others
+      description: |-
+        Upload a private file in the active tenant, requiring files.create. Response url is a relative authenticated download route.
+        Maximum size: 10MB. Allowed extensions: jpeg, jpg, png, pdf, doc, docx, txt, csv, xls, xlsx, mp3, mp4, zip.
+        Categories: image (jpeg/jpg/png), document (pdf/doc/docx/xls/xlsx), video (mp4), audio (mp3), file (txt/csv/zip).
       tags:
         - Files
+      parameters:
+        - $ref: '#/components/parameters/tenantHeader'
+        - $ref: '#/components/parameters/csrfHeader'
       requestBody:
         required: true
         content:
@@ -1132,6 +1669,98 @@ paths:
                 $ref: '#/components/schemas/Error'
               example:
                 errors:
-                  - message: 'File size should be less than 5MB'
-                    field: 'file'
-                    rule: 'size'
+                  - message: File size should be less than 10MB
+                    field: file
+                    rule: size
+  /api/v1/files/{id}:
+    delete:
+      operationId: deleteFile
+      summary: Delete a workspace file
+      description:
+        Deletes a file from storage and the database. `files.delete` may delete any workspace file; `files.delete.own`
+        is restricted to the uploader.
+      tags:
+        - Files
+      parameters:
+        - $ref: '#/components/parameters/pathId'
+        - $ref: '#/components/parameters/tenantHeader'
+        - $ref: '#/components/parameters/csrfHeader'
+      responses:
+        '204':
+          description: File deleted successfully
+        '400':
+          description: An active workspace is required or the tenant header is malformed
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+  /api/v1/sessions/csrf:
+    get:
+      operationId: bootstrapCsrf
+      summary: Bootstrap cookie authentication CSRF
+      description:
+        Returns a session-bound CSRF token and sets session/XSRF cookies. Retain cookies and send csrf_token
+        in X-CSRF-TOKEN on cookie-mode issuance and unsafe cookie-bearing requests.
+      tags:
+        - Authentication
+      security: []
+      responses:
+        '200':
+          description: CSRF token and session cookies issued
+          headers:
+            Set-Cookie:
+              description: Session and XSRF cookies; preserve in the client cookie jar.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - csrf_token
+                properties:
+                  csrf_token:
+                    type: string
+  /api/v1/files/{tenantId}/{id}/download:
+    get:
+      operationId: downloadFile
+      summary: Download a private file
+      description:
+        Requires files.read, an active membership in the URL tenant, and a file scoped to that tenant.
+        The URL tenant is checked independently of x-tenant-id or the active JWT tenant. Response is an attachment
+        with private, no-store caching.
+      tags:
+        - Files
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 9007199254740991
+        - $ref: '#/components/parameters/pathId'
+      responses:
+        '200':
+          description: Private file stream
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: private, no-store
+            Content-Disposition:
+              schema:
+                type: string
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
