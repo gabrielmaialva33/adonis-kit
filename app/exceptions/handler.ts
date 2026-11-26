@@ -1,6 +1,7 @@
 import app from '@adonisjs/core/services/app'
-import { ExceptionHandler, HttpContext } from '@adonisjs/core/http'
-import type { StatusPageRange, StatusPageRenderer } from '@adonisjs/core/types/http'
+import { ExceptionHandler, type HttpContext } from '@adonisjs/core/http'
+import type { HttpError } from '@adonisjs/core/types/http'
+import { errors as authErrors } from '@adonisjs/auth'
 
 export default class HttpExceptionHandler extends ExceptionHandler {
   /**
@@ -9,43 +10,40 @@ export default class HttpExceptionHandler extends ExceptionHandler {
    */
   protected debug = !app.inProduction
 
-  /**
-   * Status pages are used to display a custom HTML pages for certain error
-   * codes. You might want to enable them in production only, but feel
-   * free to enable them in development as well.
-   */
-  protected renderStatusPages = app.inProduction
+  protected renderStatusPages = false
 
-  /**
-   * Status pages is a collection of error code range and a callback
-   * to return the HTML contents to send as a response.
-   * Disabled for API-only application.
-   */
-  protected statusPages: Record<StatusPageRange, StatusPageRenderer> = {}
+  // API errors never negotiate an HTML page, including unknown routes.
+  renderError(error: HttpError, ctx: HttpContext) {
+    return this.renderErrorAsJSON(error, ctx)
+  }
+
+  renderValidationError(error: HttpError, ctx: HttpContext) {
+    return this.renderValidationErrorAsJSON(error, ctx)
+  }
 
   /**
    * The method is used for handling errors and returning
    * response to the client
    */
   async handle(error: unknown, ctx: HttpContext) {
-    /**
-     * Handle validation errors from VineJS
-     */
+    // Auth exceptions have their own content negotiation and bypass renderError.
+    if (error instanceof authErrors.E_UNAUTHORIZED_ACCESS) {
+      return ctx.response.unauthorized({
+        errors: [{ message: error.getResponseMessage(error, ctx) }],
+      })
+    }
+
+    // Shield's default HTML redirect is unsuitable for API consumers.
     if (
+      ctx.request.url().startsWith('/api/') &&
       error &&
       typeof error === 'object' &&
       'code' in error &&
-      error.code === 'E_VALIDATION_ERROR'
+      error.code === 'E_BAD_CSRF_TOKEN'
     ) {
-      const validationError = error as any
-      if (ctx.request.accepts(['html', 'json']) === 'json') {
-        return ctx.response.status(422).json({
-          errors: validationError.messages || [],
-        })
-      }
-      ctx.session.flashAll()
-      ctx.session.flash('errors', validationError.messages || {})
-      return ctx.response.redirect().back()
+      return ctx.response.forbidden({
+        errors: [{ code: 'E_BAD_CSRF_TOKEN', message: 'Invalid or expired CSRF token' }],
+      })
     }
 
     /**

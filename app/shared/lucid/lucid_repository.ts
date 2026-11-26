@@ -1,21 +1,22 @@
 import stringHelpers from '@adonisjs/core/helpers/string'
 import { HttpContext } from '@adonisjs/core/http'
-import { BaseModel } from '@adonisjs/lucid/orm'
-import { ModelAttributes, ModelQueryBuilderContract } from '@adonisjs/lucid/types/model'
+import { type BaseModel } from '@adonisjs/lucid/orm'
+import { type ModelAttributes, type ModelQueryBuilderContract } from '@adonisjs/lucid/types/model'
 import ValidationException from '#exceptions/validation_exception'
-import { TransactionClientContract } from '@adonisjs/lucid/types/database'
+import { type TransactionClientContract } from '@adonisjs/lucid/types/database'
 
-import LucidRepositoryInterface, {
-  DefaultOptions,
-  ModelKeys,
-  OrderDirection,
-  PaginateOptions,
-  PaginateResult,
+import {
+  type DefaultOptions,
+  type ModelKeys,
+  type OrderDirection,
+  type PaginateOptions,
+  type PaginateResult,
 } from '#shared/lucid/lucid_repository_interface'
+import type LucidRepositoryInterface from '#shared/lucid/lucid_repository_interface'
 
-export default class LucidRepository<T extends typeof BaseModel>
-  implements LucidRepositoryInterface<T>
-{
+export default class LucidRepository<
+  T extends typeof BaseModel,
+> implements LucidRepositoryInterface<T> {
   static ORDER_ASC = 'asc' as const
   static ORDER_DESC = 'desc' as const
   protected DEFAULT_PAGE = 1
@@ -53,16 +54,24 @@ export default class LucidRepository<T extends typeof BaseModel>
 
   async list(opts?: DefaultOptions<T>): Promise<InstanceType<T>[]> {
     const query = this.buildQuery({ opts })
+    const sortBy = opts?.sortBy || this.DEFAULT_SORT
+    const direction = opts?.direction || this.DEFAULT_DIRECTION
 
-    query.orderBy(opts?.sortBy || this.DEFAULT_SORT, opts?.direction || this.DEFAULT_DIRECTION)
+    this.validateSortBy(sortBy)
+    this.validateDirection(direction)
+    query.orderBy(sortBy, direction)
 
     return query
   }
 
-  async paginate(options: PaginateOptions<T>): Promise<PaginateResult<T>> {
+  async paginate(options: PaginateOptions<T> = {}): Promise<PaginateResult<T>> {
     const query = this.buildQuery({ opts: options })
+    const sortBy = options.sortBy || this.DEFAULT_SORT
+    const direction = options.direction || this.DEFAULT_DIRECTION
 
-    query.orderBy(options.sortBy || this.DEFAULT_SORT, options.direction || this.DEFAULT_DIRECTION)
+    this.validateSortBy(sortBy)
+    this.validateDirection(direction)
+    query.orderBy(sortBy, direction)
 
     return query.paginate(
       options.page || this.DEFAULT_PAGE,
@@ -137,7 +146,7 @@ export default class LucidRepository<T extends typeof BaseModel>
   protected validateSortBy(sort: string): void {
     const modelKeys = Array.from(this.model.$columnsDefinitions.keys())
     const modelKeysToSnakeCase = modelKeys.map((key) => stringHelpers.snakeCase(key))
-    const allKeys = modelKeys.concat(modelKeysToSnakeCase)
+    const allKeys = Array.from(new Set(modelKeys.concat(modelKeysToSnakeCase)))
 
     if (!allKeys.includes(sort)) {
       let message = `Invalid sort key: ${sort}. Must be one of: ${allKeys.join(', ')}`
@@ -188,7 +197,7 @@ export default class LucidRepository<T extends typeof BaseModel>
       query.useTransaction(opts.client)
     }
 
-    if (field && value) {
+    if (field !== undefined) {
       query.where({ [field]: value })
     }
 
