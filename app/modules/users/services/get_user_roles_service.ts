@@ -1,7 +1,7 @@
 import { inject } from '@adonisjs/core'
 import { HttpContext } from '@adonisjs/core/http'
 
-import UsersRepository from '#repositories/users_repository'
+import UsersRepository from '#modules/users/repositories/users_repository'
 import NotFoundException from '#exceptions/not_found_exception'
 
 @inject()

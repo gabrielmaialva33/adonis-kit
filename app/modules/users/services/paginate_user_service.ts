@@ -1,8 +1,8 @@
 import { inject } from '@adonisjs/core'
 import { ModelQueryBuilderContract } from '@adonisjs/lucid/types/model'
 
-import UsersRepository from '#repositories/users_repository'
-import User from '#models/user'
+import UsersRepository from '#modules/users/repositories/users_repository'
+import User from '#modules/users/models/user'
 
 import { PaginateOptions } from '#shared/lucid/lucid_repository_interface'
 

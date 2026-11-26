@@ -2,13 +2,13 @@ import { inject } from '@adonisjs/core'
 import { HttpContext } from '@adonisjs/core/http'
 import app from '@adonisjs/core/services/app'
 
-import PaginateUserService from '#services/users/paginate_user_service'
-import GetUserService from '#services/users/get_user_service'
-import CreateUserService from '#services/users/create_user_service'
-import EditUserService from '#services/users/edit_user_service'
-import DeleteUserService from '#services/users/delete_user_service'
+import PaginateUserService from '#modules/users/services/paginate_user_service'
+import GetUserService from '#modules/users/services/get_user_service'
+import CreateUserService from '#modules/users/services/create_user_service'
+import EditUserService from '#modules/users/services/edit_user_service'
+import DeleteUserService from '#modules/users/services/delete_user_service'
 
-import { createUserValidator, editUserValidator } from '#validators/user'
+import { createUserValidator, editUserValidator } from '#modules/users/validators/users_validator'
 
 @inject()
 export default class UsersController {
@@ -54,21 +54,21 @@ export default class UsersController {
     return response.created(user)
   }
 
-  async update({ params, request, response }: HttpContext) {
+  async update({ params, request, response, auth }: HttpContext) {
     const userId = +params.id
     const payload = await editUserValidator.validate(request.all(), { meta: { userId } })
 
     const service = await app.container.make(EditUserService)
 
-    const user = await service.run(userId, payload)
+    const user = await service.run(userId, payload, auth.user!.id)
     return response.json(user)
   }
 
-  async delete({ params, response }: HttpContext) {
+  async delete({ params, response, auth }: HttpContext) {
     const userId = +params.id
 
     const service = await app.container.make(DeleteUserService)
-    await service.run(userId)
+    await service.run(userId, auth.user!.id)
 
     return response.noContent()
   }

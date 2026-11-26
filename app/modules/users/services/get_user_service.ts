@@ -1,6 +1,6 @@
 import { inject } from '@adonisjs/core'
-import UsersRepository from '#repositories/users_repository'
-import User from '#models/user'
+import UsersRepository from '#modules/users/repositories/users_repository'
+import User from '#modules/users/models/user'
 
 @inject()
 export default class GetUserService {
