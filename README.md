@@ -1,172 +1,116 @@
-<h1 align="center">
-  <img src="https://raw.githubusercontent.com/gabrielmaialva33/adonis-kit/refs/heads/main/.github/assets/graphic-design.png" height="250" alt="Adonis Kit">
-</h1>
+# Adonis Kit
 
-<p align="center">
-  <img src="https://img.shields.io/github/license/gabrielmaialva33/adonis-kit?color=00b8d3&style=flat-square" alt="License" />
-  <img src="https://img.shields.io/github/languages/top/gabrielmaialva33/adonis-kit?style=flat-square" alt="GitHub top language" >
-  <img src="https://img.shields.io/github/repo-size/gabrielmaialva33/adonis-kit?style=flat-square" alt="Repository size" >
-  <a href="https://github.com/gabrielmaialva33/adonis-kit/commits/main">
-    <img src="https://img.shields.io/github/last-commit/gabrielmaialva33/adonis-kit?style=flat-square" alt="GitHub last commit" >
-  </a>
-</p>
+An API starter built with **AdonisJS 7**, **Node.js 24**, PostgreSQL and Redis. It includes JWT authentication, rotating refresh tokens, global RBAC, tenant workspaces, private files and account lifecycle endpoints.
 
-<p align="center">
-    <a href="README.md">English</a>
-    ·
-    <a href="README-pt.md">Portuguese</a>
-</p>
+[Português](README-pt.md) · [API specification](docs/openapi.yaml) · [HTTP examples](docs/api.http) · [Migration guide](MIGRATION.md) · [Contributing](CONTRIBUTING.md)
 
-<p align="center">
-  <a href="#bookmark-about">About</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
-  <a href="#rocket-ai-first-development">AI-First Development</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
-  <a href="#computer-technologies">Technologies</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
-  <a href="#package-installation">Installation</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
-  <a href="#memo-license">License</a>
-</p>
+## Included
 
-## :bookmark: About
+- JSON API under `/api/v1`, with validation, rate limiting and health checks.
+- Bearer authentication and explicit HttpOnly cookie authentication with CSRF protection.
+- Short-lived access JWTs, opaque refresh tokens rotated transactionally, email verification, password reset and account deletion.
+- Global roles, inherited permissions, direct grants and actor-aware delegation.
+- N:N user/tenant memberships, personal workspace onboarding and active tenant switching.
+- Tenant-scoped private upload, listing, download and deletion; local filesystem, S3, Spaces, R2 and GCS storage configuration.
+- Edge email templates, internationalization, audit records and Redis cache.
+- Japa unit and functional suites, OpenAPI documentation and production build tooling.
 
-**Adonis Kit** is a modern, opinionated, and AI-first API starter kit designed to accelerate the development of robust
-backend applications. Built with **AdonisJS v6**, it provides a powerful foundation for creating scalable REST APIs with
-comprehensive authentication, authorization, and data management capabilities.
+This repository provides the API and email templates. Connect your own web, mobile or service client. The API reference is served at `/docs`, with its specification at `/docs/openapi.yaml`.
 
-This project is not just a collection of technologies; it's a foundation engineered for efficiency, scalability, and
-seamless collaboration with AI development partners. By providing a well-defined architecture with features like
-multi-guard authentication, role-based access control (RBAC), and file management out of the box, it allows developers (
-both human and AI) to focus on building unique business logic instead of boilerplate code.
+## Get started
 
-### 🏗️ Architecture Overview
+Use Node **24.21.0** from [.nvmrc](.nvmrc) and pnpm **11.22.0**, pinned by `packageManager` in [package.json](package.json). TypeScript 6 and 7 coexist for tooling compatibility; the scripts in `package.json` are authoritative.
 
-```mermaid
-graph TD
-    subgraph "API Layer"
-        API_ROUTES[Routes]
-        API_MW["Middleware (Auth, ACL)"]
-        API_CTRL[Controllers]
-        API_VALIDATORS[Validators]
-    end
-
-    subgraph "Business Layer"
-        BL_SERVICES[Services]
-        BL_REPOS[Repositories]
-        BL_EVENTS[Events & Listeners]
-    end
-
-    subgraph "Data Layer"
-        DL_MODELS[Lucid Models]
-        DL_DB[(PostgreSQL)]
-        DL_CACHE[(Redis)]
-    end
-
-    subgraph "Configuration"
-        CONF_AUTH[Auth Guards]
-        CONF_DB[Database Config]
-        CONF_STORAGE[File Storage]
-    end
-
-    API_ROUTES --> API_MW
-    API_MW --> API_CTRL
-    API_CTRL --> API_VALIDATORS
-    API_CTRL --> BL_SERVICES
-    BL_SERVICES --> BL_REPOS
-    BL_SERVICES --> BL_EVENTS
-    BL_REPOS --> DL_MODELS
-    DL_MODELS --> DL_DB
-    BL_SERVICES --> DL_CACHE
+```sh
+git clone https://github.com/gabrielmaialva33/adonis-kit.git
+cd adonis-kit
+pnpm install --frozen-lockfile
+cp .env.example .env
+pnpm ace generate:key
 ```
 
-## :rocket: AI-First Development
+Configure your PostgreSQL database, Redis, mail and storage in `.env` using [.env.example](.env.example). Use a local mail capture service for development. Then initialize your development database:
 
-This starter kit is uniquely designed to maximize the effectiveness of AI-assisted coding.
+```sh
+pnpm ace migration:run
+pnpm ace db:seed
+pnpm dev
+```
 
-- **Well-Structured API Foundation**: The clear separation of concerns (controllers, services, repositories) makes it
-  easy for AI to locate, understand, and modify specific parts of the codebase with precision.
-- **Strongly-Typed Foundation**: Complete TypeScript usage creates a clear contract across all API layers. This reduces
-  ambiguity and allows AI to understand data structures and function signatures, leading to fewer errors.
-- **Modular and Opinionated Architecture**: Domain-driven service organization and consistent patterns make it simple
-  for AI to extend functionality following established conventions.
-- **Focus on Business Logic**: With boilerplate for authentication, permissions, and file storage already handled, AI
-  can be directed to solve higher-level business problems from day one.
+The default API address is `http://localhost:3333`. Test `/api/v1/health` or open `/docs`. Set `APP_URL` to the public API origin and configure password-reset delivery for your client as described in the environment example. Use independent production secrets and private storage policies; never reuse example credentials.
 
-## 🌟 Key Features
+## Authentication
 
-- **🔐 Multi-Guard Authentication**: Ready-to-use JWT-based authentication.
-- **👥 Advanced Role-Based Access Control (RBAC)**: Manage user permissions with roles and fine-grained rules.
-- **📁 File Management**: Pre-configured file upload service with support for local, S3, and GCS drivers.
-- **⚡️ High-Performance API**: Optimized REST endpoints with intelligent caching and queue processing.
-- **🔄 Event-Driven Architecture**: Built-in event system for decoupled, scalable application logic.
-- **✅ Type-Safe API**: Complete TypeScript coverage with auto-completion and type checking.
-- **🏥 Health Checks**: Integrated health check endpoint for monitoring.
+Bearer mode is the default. Send `uid` (email or username) and `password` to `POST /api/v1/sessions/sign-in`. Sign-up uses `full_name`, `email`, optional `username`, `password` and `password_confirmation`.
 
-## :computer: Technologies
+```sh
+curl http://localhost:3333/api/v1/sessions/sign-in \
+  -H 'Content-Type: application/json' \
+  -d '{"uid":"person@example.com","password":"development-password"}'
 
-- **[AdonisJS v6](https://adonisjs.com/)**: A robust Node.js framework for the backend.
-- **[TypeScript](https://www.typescriptlang.org/)**: For type safety across the entire API.
-- **[PostgreSQL](https://www.postgresql.org/)**: A reliable and powerful relational database.
-- **[Redis](https://redis.io/)**: Used for caching, queues, and session management.
-- **[VineJS](https://vinejs.dev/)**: Modern validation library for request data.
-- **[Lucid ORM](https://lucid.adonisjs.com/)**: Elegant ActiveRecord implementation for AdonisJS.
+curl http://localhost:3333/api/v1/me \
+  -H 'Authorization: Bearer <auth.access_token>'
+```
 
-## :package: Installation
+Bearer responses expose `auth.access_token` and `auth.refresh_token`. Access tokens expire after 15 minutes. Refresh tokens last 3 days and are **opaque credentials**, not JWTs. Send `refresh_token` to `POST /api/v1/sessions/refresh`, then replace both saved credentials with the returned pair. Serialize refresh requests: replaying a consumed refresh token invalidates the current credential generation. `POST /api/v1/sessions/logout` revokes the submitted refresh token; an already-issued bearer access token can remain valid until expiry.
 
-### ✔️ Prerequisites
+Cookie clients must use the explicit cookie mode and CSRF bootstrap described in [the HTTP examples](docs/api.http). Cookie mutation requests require a matching CSRF header; never implement a browser client by disabling CSRF. Configure CORS and cookie settings for the actual client/API origins.
 
-- **Node.js** (v18 or higher)
-- **pnpm** (or npm/yarn)
-- **Docker** (for running PostgreSQL and Redis)
+Passwords require at least 8 characters on creation and change. Password changes, reset and account deletion invalidate earlier credentials. User JSON exposes `email_verified` and `email_verified_at`, while internal verification metadata remains private.
 
-### 🚀 Getting Started
+## Production cookie clients
 
-1. **Clone the repository:**
+Terminate HTTPS at your reverse proxy or load balancer and set `APP_URL` to the public HTTPS API origin, not an internal container address. Production access/session cookies are `Secure`; a plain HTTP deployment is not a working production cookie-authentication setup. Configure the HTTP server's trusted-proxy policy in [config/app.ts](config/app.ts) for your actual proxy addresses/hops, and have the proxy overwrite forwarded headers. Do not trust arbitrary client-supplied forwarding headers. Verify the public scheme, host and client address through the deployed proxy.
 
-   ```sh
-   git clone https://github.com/gabrielmaialva33/adonis-kit.git
-   cd adonis-kit
-   ```
+For a client on another origin, explicitly allow its origin in [config/cors.ts](config/cors.ts); the default origin list is empty. Retain credential support, use `credentials: 'include'` in browser requests and allow the CSRF header in preflight responses. Bootstrap with `GET /api/v1/sessions/csrf`, then send its `csrf_token` as `X-CSRF-TOKEN`. Alternatively, a client that reads the `XSRF-TOKEN` cookie sends that cookie value as `X-XSRF-TOKEN`; the two header values are not interchangeable. CORS permission does not override the default `SameSite=Lax` cookie policy. A truly cross-site client needs a deliberately reviewed cookie policy across the access and session/XSRF cookies, with HTTPS and CSRF retained.
 
-2. **Install dependencies:**
+Set optional `PASSWORD_RESET_URL` to your separately hosted reset page. Its existing query parameters are preserved and the token parameter is set. When omitted, the email supplies the token and API POST instructions instead of linking to an application page. Validate this flow, CSRF bootstrap, login, refresh, tenant switching and logout through the production proxy before release.
 
-   ```sh
-   pnpm install
-   ```
+## Tenants and authorization
 
-3. **Setup environment variables:**
+`GET /api/v1/tenants/me` lists memberships. `POST /api/v1/tenants` creates a workspace for callers with `tenants.create`; `POST /api/v1/tenants/switch` accepts `tenant_id` and issues credentials for that active workspace. Public sign-up creates a personal workspace when `REGISTRATION_WORKSPACE_MODE=personal`; use `none` to provision memberships separately.
 
-   ```sh
-   cp .env.example .env
-   ```
+Tenant middleware resolves an explicit `x-tenant-id` header, then the verified JWT `tenantId`, then the user's first active membership. It always verifies active membership. File operations require a resolved tenant; new tenant-owned entities must explicitly scope repository reads and writes by the verified tenant.
 
-   _Open the `.env` file and configure your database credentials and other settings._
+Users, roles, permissions and audit records are global. A tenant membership role is separate from global RBAC and does not grant global administrative authority. Permission assignment requires ROOT; non-ROOT actors can delegate only permitted lower roles and cannot modify protected equal/higher privileged accounts.
 
-4. **Run database migrations:**
+File URLs are authenticated API paths such as `/api/v1/files/1/10/download`. Downloads require `files.read` and active membership in the URL's tenant. A URL alone does not grant access. Existing public cloud objects need their own access-policy migration.
 
-   ```sh
-   node ace migration:run
-   ```
+## Development
 
-5. **Start the development server:**
-   ```sh
-   pnpm dev
-   ```
-   _Your API will be available at `http://localhost:3333`._
+```text
+app/modules/<domain>/  controllers, services, repositories, models, validators, routes
+app/shared/            middleware, JWT, shared repositories and services
+app/exceptions/        typed exceptions
+start/                 bootstrapping and route registration
+config/                framework and integration configuration
+database/              migrations, factories and seeders
+resources/             Edge email templates and translations
+tests/unit/            Japa unit tests
+tests/functional/      Japa HTTP and integration tests
+docs/                  OpenAPI, ReDoc and HTTP examples
+```
 
-### 📜 Available Scripts
+Follow controller → service → repository → model and use `@inject()` for dependencies. Import application code through `#modules/*`, `#shared/*` and `#exceptions/*`. Ace generators use framework-default locations: move generated files into their domain and correct imports before using them.
 
-- `pnpm dev`: Starts the development server with HMR.
-- `pnpm build`: Compiles the application for production.
-- `pnpm start`: Runs the production-ready server.
-- `pnpm test`: Executes unit tests.
-- `pnpm test:e2e`: Executes end-to-end tests.
-- `pnpm lint`: Lints the codebase.
-- `pnpm format`: Formats the code with Prettier.
+| Command              | Purpose                                         |
+| -------------------- | ----------------------------------------------- |
+| `pnpm dev`           | Start API development server with HMR           |
+| `pnpm ace <command>` | Run an Ace command                              |
+| `pnpm lint`          | Check ESLint rules                              |
+| `pnpm typecheck`     | Check backend TypeScript                        |
+| `pnpm test`          | Run Japa unit tests                             |
+| `pnpm test:e2e`      | Run Japa unit and functional suites             |
+| `pnpm build`         | Build the production API                        |
+| `pnpm start`         | Start the compiled API from the build directory |
+| `pnpm format`        | Format repository files                         |
 
-## :memo: License
+Functional tests migrate and seed the database configured for testing. Use a dedicated disposable test database and Redis namespace, never production data. See [CONTRIBUTING.md](CONTRIBUTING.md) for validation and migration conventions.
 
-This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
+This is a pre-1.0 template. Update original `create_*` migrations for unshipped schema changes and recreate disposable development/test databases. Add a migration for a genuinely new schema object. Existing applications require a reviewed data migration; see [MIGRATION.md](MIGRATION.md).
 
----
+## Community and license
 
-<p align="center">
-  Made with ❤️ by the community.
-</p>
+The default branch is `main`. Use [issues](https://github.com/gabrielmaialva33/adonis-kit/issues) for reproducible bugs and proposals, and [private vulnerability reporting](https://github.com/gabrielmaialva33/adonis-kit/security/advisories/new) for security reports. Read [SECURITY.md](SECURITY.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for private reporting guidance.
+
+Licensed under [MIT](LICENSE).
