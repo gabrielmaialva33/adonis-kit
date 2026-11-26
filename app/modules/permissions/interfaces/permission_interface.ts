@@ -1,13 +1,36 @@
-import LucidRepositoryInterface from '#shared/lucid/lucid_repository_interface'
-import Permission from '#models/permission'
+import type LucidRepositoryInterface from '#shared/lucid/lucid_repository_interface'
+import type { PaginateResult } from '#shared/lucid/lucid_repository_interface'
+import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
+import type Permission from '#modules/permissions/models/permission'
 
 namespace IPermission {
   export interface Repository extends LucidRepositoryInterface<typeof Permission> {
     findByName(name: string): Promise<Permission | null>
 
-    findByResourceAction(resource: string, action: string): Promise<Permission | null>
+    findByResourceAction(
+      resource: string,
+      action: string,
+      context?: string
+    ): Promise<Permission | null>
 
     syncPermissions(permissions: SyncPermissionData[]): Promise<void>
+
+    paginateFiltered(
+      page: number,
+      perPage: number,
+      resource?: string,
+      action?: string
+    ): Promise<PaginateResult<typeof Permission>>
+
+    findAllIds(trx?: TransactionClientContract): Promise<number[]>
+
+    findAdminPermissionIds(trx?: TransactionClientContract): Promise<number[]>
+
+    findUserPermissionIds(trx?: TransactionClientContract): Promise<number[]>
+
+    findGuestPermissionIds(trx?: TransactionClientContract): Promise<number[]>
+
+    findByRoleSlugs(slugs: string[]): Promise<Permission[]>
   }
 
   export interface SyncPermissionData {
@@ -15,6 +38,7 @@ namespace IPermission {
     resource: string
     action: string
     description?: string
+    context?: string
   }
 
   export interface PermissionCheck {
@@ -30,7 +54,7 @@ namespace IPermission {
     ROLES = 'roles',
     PERMISSIONS = 'permissions',
     FILES = 'files',
-    SETTINGS = 'settings',
+    TENANTS = 'tenants',
     REPORTS = 'reports',
     AUDIT = 'audit',
   }

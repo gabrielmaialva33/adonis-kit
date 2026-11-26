@@ -8,8 +8,8 @@ import {
 } from '@adonisjs/lucid/orm'
 import type { ManyToMany } from '@adonisjs/lucid/types/relations'
 
-import User from '#models/user'
-import Role from '#models/role'
+import User from '#modules/users/models/user'
+import Role from '#modules/roles/models/role'
 
 export default class Permission extends BaseModel {
   static table = 'permissions'

@@ -1,5 +1,5 @@
 import vine from '@vinejs/vine'
-import IPermission from '#interfaces/permission_interface'
+import IPermission from '#modules/permissions/interfaces/permission_interface'
 
 /**
  * Validator for creating a permission
@@ -10,6 +10,7 @@ export const createPermissionValidator = vine.compile(
     description: vine.string().optional(),
     resource: vine.enum(Object.values(IPermission.Resources)),
     action: vine.enum(Object.values(IPermission.Actions)),
+    context: vine.enum(Object.values(IPermission.Contexts)).optional(),
   })
 )
 

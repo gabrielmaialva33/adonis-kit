@@ -1,9 +1,10 @@
 import router from '@adonisjs/core/services/router'
 import { middleware } from '#start/kernel'
 import { adminThrottle } from '#start/limiter'
-import IPermission from '#interfaces/permission_interface'
+import IPermission from '#modules/permissions/interfaces/permission_interface'
 
-const PermissionsController = () => import('#controllers/permission/permissions_controller')
+const PermissionsController = () =>
+  import('#modules/permissions/controllers/permissions_controller')
 
 router
   .group(() => {

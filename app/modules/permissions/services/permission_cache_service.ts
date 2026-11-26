@@ -1,14 +1,20 @@
 import { inject } from '@adonisjs/core'
 import redis from '@adonisjs/redis/services/main'
-import Permission from '#models/permission'
-import Role from '#models/role'
-import User from '#models/user'
+import Permission from '#modules/permissions/models/permission'
+import Role from '#modules/roles/models/role'
+import EffectivePermissionsService from '#modules/permissions/services/effective_permissions_service'
+import UsersRepository from '#modules/users/repositories/users_repository'
 
 @inject()
 export default class PermissionCacheService {
-  private readonly CACHE_PREFIX = 'acl:permissions'
+  private readonly CACHE_PREFIX = 'acl:permissions:v2'
   private readonly DEFAULT_TTL = 3600 // 1 hour in seconds
   private readonly ROLE_TTL = 7200 // 2 hours in seconds
+
+  constructor(
+    private usersRepository: UsersRepository,
+    private effectivePermissions: EffectivePermissionsService
+  ) {}
 
   /**
    * Cache user permissions
@@ -21,6 +27,7 @@ export default class PermissionCacheService {
       resource: p.resource,
       action: p.action,
       context: p.context || 'any',
+      expiresAt: p.$extras.pivot_expires_at ? new Date(p.$extras.pivot_expires_at).getTime() : null,
     }))
 
     await redis.setex(key, this.DEFAULT_TTL, JSON.stringify(permissionData))
@@ -39,15 +46,20 @@ export default class PermissionCacheService {
 
     try {
       const permissionData = JSON.parse(cached)
-      return permissionData.map((p: any) => {
-        const permission = new Permission()
-        permission.id = p.id
-        permission.name = p.name
-        permission.resource = p.resource
-        permission.action = p.action
-        permission.context = p.context
-        return permission
-      })
+      return permissionData
+        .filter(
+          (p: any) =>
+            p.expiresAt === null || (Number.isFinite(p.expiresAt) && p.expiresAt > Date.now())
+        )
+        .map((p: any) => {
+          const permission = new Permission()
+          permission.id = p.id
+          permission.name = p.name
+          permission.resource = p.resource
+          permission.action = p.action
+          permission.context = p.context
+          return permission
+        })
     } catch (error) {
       await redis.del(key)
       return null
@@ -190,24 +202,14 @@ export default class PermissionCacheService {
    * Invalidate all user caches (when permissions change globally)
    */
   async invalidateAllUserCaches(): Promise<void> {
-    const pattern = `${this.CACHE_PREFIX}:user:*`
-    const keys = await redis.keys(pattern)
-
-    if (keys.length > 0) {
-      await redis.del(...keys)
-    }
+    await this.deleteByPattern(`${this.CACHE_PREFIX}:user:*`)
   }
 
   /**
    * Invalidate all role caches
    */
   async invalidateAllRoleCaches(): Promise<void> {
-    const pattern = `${this.CACHE_PREFIX}:role:*`
-    const keys = await redis.keys(pattern)
-
-    if (keys.length > 0) {
-      await redis.del(...keys)
-    }
+    await this.deleteByPattern(`${this.CACHE_PREFIX}:role:*`)
   }
 
   /**
@@ -226,13 +228,7 @@ export default class PermissionCacheService {
    * Warm up cache for a user
    */
   async warmUpUserCache(userId: number): Promise<void> {
-    const user = await User.query()
-      .where('id', userId)
-      .preload('roles', (query) => {
-        query.preload('permissions')
-      })
-      .preload('permissions')
-      .first()
+    const user = await this.usersRepository.findByIdWithPermissionsAndRoles(userId)
 
     if (!user) {
       return
@@ -241,17 +237,7 @@ export default class PermissionCacheService {
     // Cache user roles
     await this.cacheUserRoles(userId, user.roles)
 
-    // Cache user permissions (direct + from roles)
-    const allPermissions = [...user.permissions]
-    user.roles.forEach((role) => {
-      role.permissions.forEach((permission) => {
-        if (!allPermissions.find((p) => p.id === permission.id)) {
-          allPermissions.push(permission)
-        }
-      })
-    })
-
-    await this.cacheUserPermissions(userId, allPermissions)
+    await this.cacheUserPermissions(userId, await this.effectivePermissions.forUser(userId))
   }
 
   /**
@@ -264,7 +250,7 @@ export default class PermissionCacheService {
     rolePermissions: number
     permissionChecks: number
   }> {
-    const allKeys = await redis.keys(`${this.CACHE_PREFIX}:*`)
+    const allKeys = await this.scanKeys(`${this.CACHE_PREFIX}:*`)
 
     const userPermissions = allKeys.filter(
       (key) => key.includes(':user:') && !key.includes(':user_roles:')
@@ -286,11 +272,27 @@ export default class PermissionCacheService {
    * Clear all ACL cache
    */
   async clearAllCache(): Promise<void> {
-    const pattern = `${this.CACHE_PREFIX}:*`
-    const keys = await redis.keys(pattern)
+    await this.deleteByPattern(`${this.CACHE_PREFIX}:*`)
+  }
 
-    if (keys.length > 0) {
-      await redis.del(...keys)
+  private async scanKeys(pattern: string): Promise<string[]> {
+    let cursor = '0'
+    const keys: string[] = []
+
+    do {
+      const [nextCursor, batch] = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100)
+      cursor = nextCursor
+      keys.push(...batch)
+    } while (cursor !== '0')
+
+    return keys
+  }
+
+  private async deleteByPattern(pattern: string): Promise<void> {
+    const keys = await this.scanKeys(pattern)
+
+    for (let index = 0; index < keys.length; index += 500) {
+      await redis.del(...keys.slice(index, index + 500))
     }
   }
 
