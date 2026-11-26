@@ -5,16 +5,30 @@ export default class HealthChecksController {
   async handle({ response }: HttpContext) {
     const report = await healthChecks.run()
 
-    // Transform the report to match an expected format
+    /**
+     * Report every check, not just the database one: a 503 whose payload only
+     * ever mentions the database is undiagnosable when something else is what
+     * actually went down.
+     */
     const healthResponse = {
       healthy: report.isHealthy,
       services: {
+        redis: {
+          healthy: report.checks.some(
+            (check) => check.name.includes('Redis') && check.status === 'ok'
+          ),
+        },
         database: {
           healthy: report.checks.some(
             (check) => check.name.includes('Database') && check.status === 'ok'
           ),
         },
       },
+      checks: report.checks.map((check) => ({
+        name: check.name,
+        status: check.status,
+        message: check.message,
+      })),
     }
 
     if (report.isHealthy) {
