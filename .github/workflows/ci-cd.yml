@@ -9,12 +9,6 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
-    env:
-      # Tests fake delivery; never discover a developer's mail service.
-      MAIL_MAILER: smtp
-      SMTP_HOST: 127.0.0.1
-      SMTP_PORT: 9
-
     services:
       postgres:
         image: postgres:16
