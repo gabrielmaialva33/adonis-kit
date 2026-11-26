@@ -9,9 +9,6 @@ tmp
 .env.production.local
 .env.development.local
 
-# Frontend assets compiled code
-public/assets
-
 # Build tools specific
 npm-debug.log
 yarn-error.log
@@ -29,3 +26,9 @@ yarn-error.log
 
 # AdonisJS specific
 storage/uploads/*
+
+# Lucid v7 auto-generated schema classes
+database/schema.ts
+
+# AdonisJS generated types
+.adonisjs

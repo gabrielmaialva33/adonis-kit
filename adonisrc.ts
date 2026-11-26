@@ -30,7 +30,6 @@ export default defineConfig({
     () => import('@adonisjs/lucid/commands'),
     () => import('@adonisjs/cache/commands'),
     () => import('@adonisjs/mail/commands'),
-    () => import('@rlanz/bull-queue/commands'),
   ],
 
   /*
@@ -53,7 +52,6 @@ export default defineConfig({
     () => import('@adonisjs/core/providers/edge_provider'),
     () => import('@adonisjs/session/session_provider'),
     () => import('@adonisjs/shield/shield_provider'),
-    () => import('@adonisjs/static/static_provider'),
     () => import('@adonisjs/cors/cors_provider'),
     () => import('@adonisjs/lucid/database_provider'),
     () => import('@adonisjs/auth/auth_provider'),
@@ -63,8 +61,8 @@ export default defineConfig({
     () => import('#providers/app_provider'),
     () => import('#providers/auth_events_provider'),
     () => import('@adonisjs/mail/mail_provider'),
-    () => import('@rlanz/bull-queue/queue_provider'),
     () => import('@adonisjs/redis/redis_provider'),
+    () => import('@adonisjs/cache/cache_provider'),
     () => import('@adonisjs/drive/drive_provider'),
   ],
 
@@ -90,12 +88,12 @@ export default defineConfig({
   tests: {
     suites: [
       {
-        files: ['tests/unit/**/*.spec(.ts|.js)'],
+        files: ['tests/unit/**/*.spec.ts'],
         name: 'unit',
         timeout: 2000,
       },
       {
-        files: ['tests/functional/**/*.spec(.ts|.js)'],
+        files: ['tests/functional/**/*.spec.ts'],
         name: 'functional',
         timeout: 30000,
       },
@@ -114,10 +112,16 @@ export default defineConfig({
   */
   metaFiles: [
     {
+      pattern: 'resources/views/**/*.edge',
+      reloadServer: false,
+    },
+    {
       pattern: 'resources/lang/**/*.{json,yaml,yml}',
       reloadServer: false,
     },
+    {
+      pattern: 'docs/*.{html,yaml}',
+      reloadServer: false,
+    },
   ],
-
-  assetsBundler: false,
 })

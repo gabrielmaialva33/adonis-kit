@@ -25,3 +25,8 @@ tmp/
 
 # Cache
 .cache/
+
+# Edge email output has meaningful whitespace; the Edge formatter is not
+# idempotent for mixed text/interpolation or plain-text mail. Rendered templates
+# are covered by Japa instead.
+resources/views/emails/*.edge
