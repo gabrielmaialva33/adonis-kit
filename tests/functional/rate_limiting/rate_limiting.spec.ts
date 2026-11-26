@@ -2,12 +2,13 @@ import { test } from '@japa/runner'
 import testUtils from '@adonisjs/core/services/test_utils'
 import limiter from '@adonisjs/limiter/services/main'
 
-import User from '#models/user'
-import Permission from '#models/permission'
-import Role from '#models/role'
+import User from '#modules/users/models/user'
+import Permission from '#modules/permissions/models/permission'
+import Role from '#modules/roles/models/role'
+import Tenant from '#modules/tenants/models/tenant'
 
-import IRole from '#interfaces/role_interface'
-import IPermission from '#interfaces/permission_interface'
+import IRole from '#modules/roles/interfaces/role_interface'
+import IPermission from '#modules/permissions/interfaces/permission_interface'
 
 test.group('Rate Limiting', (group) => {
   group.each.setup(() => testUtils.db().withGlobalTransaction())
@@ -80,17 +81,13 @@ test.group('Rate Limiting', (group) => {
 
     await user.related('roles').sync([userRole.id])
 
-    // Test basic guest access (no rate limiting check due to configuration issues)
     const guestResponse = await client.get('/version')
-    assert.equal(guestResponse.status(), 200)
+    guestResponse.assertStatus(200)
+    assert.equal(guestResponse.header('x-ratelimit-limit'), '20')
 
-    // Test authenticated access (should use different rate limiter)
     const authResponse = await client.get('/version').loginAs(user)
-    assert.equal(authResponse.status(), 200)
-
-    // Verify that both authenticated and guest users can access the endpoint
-    // The actual rate limiting behavior is tested in other more specific tests
-    assert.isTrue(true) // Test passes if no exceptions thrown
+    authResponse.assertStatus(200)
+    assert.equal(authResponse.header('x-ratelimit-limit'), '60')
   })
 
   test('should block user after exceeding auth attempts', async ({ client, assert }) => {
@@ -151,18 +148,22 @@ test.group('Rate Limiting', (group) => {
 
     await userRole.related('permissions').sync([uploadPermission.id])
 
+    const tenant = await Tenant.create({
+      name: 'Upload Workspace',
+      slug: 'upload-workspace',
+      is_active: true,
+    })
+    await user.related('tenants').attach({ [tenant.id]: { role: 'owner' } })
+
     // Create test files for upload attempts
     const { join } = await import('node:path')
     const appModule = await import('@adonisjs/core/services/app')
     const app = appModule.default
     const fs = await import('node:fs')
 
-    const tmpDir = app.tmpPath()
-    await fs.promises.mkdir(tmpDir, { recursive: true })
-
     const testFiles = []
     for (let i = 0; i < 11; i++) {
-      const testFilePath = join(tmpDir, `test-${i}.txt`)
+      const testFilePath = join(app.tmpPath(), `test-${i}.txt`)
       await fs.promises.writeFile(testFilePath, `Test content ${i}`)
       testFiles.push(testFilePath)
     }
@@ -195,7 +196,7 @@ test.group('Rate Limiting', (group) => {
 
     // Clean up test files
     for (const file of testFiles) {
-      await fs.promises.unlink(file).catch(() => {})
+      await fs.promises.unlink(file)
     }
   })
 

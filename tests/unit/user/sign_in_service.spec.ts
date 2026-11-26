@@ -3,12 +3,12 @@ import testUtils from '@adonisjs/core/services/test_utils'
 import app from '@adonisjs/core/services/app'
 import db from '@adonisjs/lucid/services/db'
 
-import Role from '#models/role'
-import User from '#models/user'
+import Role from '#modules/roles/models/role'
+import User from '#modules/users/models/user'
 
-import IRole from '#interfaces/role_interface'
+import IRole from '#modules/roles/interfaces/role_interface'
 
-import SignInService from '#services/users/sign_in_service'
+import SignInService from '#modules/auth/services/sign_in_service'
 
 test.group('SignInService', (group) => {
   group.each.setup(() => testUtils.db().withGlobalTransaction())
@@ -45,13 +45,11 @@ test.group('SignInService', (group) => {
     })
 
     assert.exists(result.auth)
-    assert.exists(result.auth.access_token)
-    assert.exists(result.auth.refresh_token)
-    assert.isString(result.auth.access_token)
-    assert.isString(result.auth.refresh_token)
-    assert.equal(result.id, user.id)
-    assert.equal(result.email, user.email)
-    assert.equal(result.full_name, user.full_name)
+    assert.isString(result.auth!.access_token)
+    assert.isString(result.auth!.refresh_token)
+    assert.equal(result.user.id, user.id)
+    assert.equal(result.user.email, user.email)
+    assert.equal(result.user.full_name, user.full_name)
   })
 
   test('should throw exception for non-existent user', async ({ assert }) => {
@@ -136,8 +134,8 @@ test.group('SignInService', (group) => {
     })
 
     assert.exists(result.auth)
-    assert.exists(result.id)
-    assert.equal(result.email, user.email)
+    assert.exists(result.user.id)
+    assert.equal(result.user.email, user.email)
   })
 
   test('should handle user without roles', async ({ assert }) => {
@@ -169,9 +167,9 @@ test.group('SignInService', (group) => {
     })
 
     assert.exists(result.auth)
-    assert.exists(result.auth.access_token)
-    assert.exists(result.auth.refresh_token)
-    assert.equal(result.id, user.id)
+    assert.isString(result.auth!.access_token)
+    assert.isString(result.auth!.refresh_token)
+    assert.equal(result.user.id, user.id)
   })
 
   test('should handle soft deleted users', async ({ assert }) => {

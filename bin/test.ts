@@ -10,11 +10,14 @@
 |
 */
 
-process.env.NODE_ENV = 'test'
-
 import 'reflect-metadata'
 import { Ignitor, prettyPrintError } from '@adonisjs/core'
-import { configure, processCLIArgs, run } from '@japa/runner'
+import { processCLIArgs } from '@japa/runner'
+import { setupSyntheticGcsCredentials } from '#tests/helpers/synthetic_gcs_credentials'
+
+process.env.NODE_ENV = 'test'
+setupSyntheticGcsCredentials()
+processCLIArgs(process.argv.splice(2))
 
 /**
  * URL to the application root. AdonisJS need it to resolve
@@ -43,19 +46,33 @@ new Ignitor(APP_ROOT, { importer: IMPORTER })
   })
   .testRunner()
   .configure(async (app) => {
-    const { runnerHooks, ...config } = await import('../tests/bootstrap.js')
+    const { plugins, runnerHooks, configureSuite } = await import('../tests/bootstrap.js')
+    const { configure } = await import('@japa/runner')
 
-    processCLIArgs(process.argv.splice(2))
     configure({
-      ...app.rcFile.tests,
-      ...config,
-      ...{
-        setup: runnerHooks.setup,
-        teardown: runnerHooks.teardown.concat([() => app.terminate()]),
-      },
+      plugins,
+      suites: [
+        {
+          name: 'unit',
+          files: ['tests/unit/**/*.spec.ts'],
+          timeout: 2000,
+        },
+        {
+          name: 'functional',
+          files: ['tests/functional/**/*.spec.ts'],
+          timeout: 30_000,
+        },
+      ],
+      configureSuite,
+      setup: runnerHooks.setup,
+      teardown: runnerHooks.teardown.concat([() => app.terminate()]),
+      forceExit: true,
     })
   })
-  .run(() => run())
+  .run(async () => {
+    const { run } = await import('@japa/runner')
+    run()
+  })
   .catch((error) => {
     process.exitCode = 1
     prettyPrintError(error)

@@ -1,9 +1,13 @@
+import { mkdir } from 'node:fs/promises'
+
 import { assert } from '@japa/assert'
 import { apiClient } from '@japa/api-client'
 import app from '@adonisjs/core/services/app'
 import type { Config } from '@japa/runner/types'
 import { pluginAdonisJS } from '@japa/plugin-adonisjs'
 import testUtils from '@adonisjs/core/services/test_utils'
+import redis from '@adonisjs/redis/services/main'
+import limiter from '@adonisjs/limiter/services/main'
 import { authApiClient } from '@adonisjs/auth/plugins/api_client'
 import { sessionApiClient } from '@adonisjs/session/plugins/api_client'
 import { shieldApiClient } from '@adonisjs/shield/plugins/api_client'
@@ -37,7 +41,13 @@ export const plugins: Config['plugins'] = [
  * The teardown functions are executed after all the tests
  */
 export const runnerHooks: Required<Pick<Config, 'setup' | 'teardown'>> = {
-  setup: [() => testUtils.db().migrate(), () => testUtils.db().seed()],
+  setup: [
+    async () => {
+      await mkdir(app.tmpPath(), { recursive: true })
+    },
+    () => testUtils.db().migrate(),
+    () => testUtils.db().seed(),
+  ],
   teardown: [],
 }
 
@@ -46,7 +56,18 @@ export const runnerHooks: Required<Pick<Config, 'setup' | 'teardown'>> = {
  * Learn more - https://japa.dev/docs/test-suites#lifecycle-hooks
  */
 export const configureSuite: Config['configureSuite'] = (suite) => {
-  if (['functional', 'e2e'].includes(suite.name)) {
-    return suite.setup(() => testUtils.httpServer().start())
+  if (['functional'].includes(suite.name)) {
+    const clearTestState = async () => {
+      await redis.flushdb()
+      await limiter.clear()
+    }
+
+    suite.onTest((test) => {
+      test.setup(clearTestState)
+    })
+    suite.onGroup((group) => {
+      group.each.setup(clearTestState)
+    })
+    suite.setup(() => testUtils.httpServer().start())
   }
 }
