@@ -1,18 +1,23 @@
-name: CI/CD Pipeline
+name: CI
 
 on:
   push:
-    branches: [master, develop]
+    branches: [main, develop]
   pull_request:
-    branches: [master]
+    branches: [main]
 
 jobs:
-  test:
+  ci:
     runs-on: ubuntu-latest
+    env:
+      # Tests fake delivery; never discover a developer's mail service.
+      MAIL_MAILER: smtp
+      SMTP_HOST: 127.0.0.1
+      SMTP_PORT: 9
 
     services:
       postgres:
-        image: postgres:15
+        image: postgres:16
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_USER: postgres
@@ -39,87 +44,35 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # pnpm 11 is required: pnpm-workspace.yaml uses the `allowBuilds` format
+      # (pnpm 11) to whitelist native build scripts (argon2, better-sqlite3).
       - name: Install pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 8
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'pnpm'
+          node-version-file: .nvmrc
+          cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
-      - name: Setup test environment
-        run: cp .env.test .env
+      - name: Prepare test environment
+        run: |
+          cp .env.test .env
+          mkdir -p tmp
 
-      - name: Create tmp directory
-        run: mkdir -p tmp
-
-      - name: Run database migrations
-        run: NODE_ENV=test node ace migration:run --force
-
-      - name: Run database seeders
-        run: NODE_ENV=test node ace db:seed
-
-      - name: Run unit tests
-        run: pnpm test
-
-      - name: Run e2e tests
-        run: pnpm test:e2e
-
-      - name: Run linting
+      - name: Lint
         run: pnpm lint
 
-      - name: Run type checking
+      - name: Type check
         run: pnpm typecheck
 
-  build-and-deploy:
-    needs: test
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/master'
+      # Migrations run automatically in the Japa test setup; Postgres + Redis
+      # come from the services above (.env.test points at localhost).
+      - name: Backend tests (unit + functional)
+        run: pnpm test:e2e
 
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 8
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install
-
-      - name: Build application
-        run: node ace build --ignore-ts-errors
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: './build/public'
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Build
+        run: pnpm build
