@@ -1,7 +1,7 @@
 import { DateTime } from 'luxon'
 import { BaseModel, belongsTo, column, SnakeCaseNamingStrategy } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
-import User from '#models/user'
+import User from '#modules/users/models/user'
 
 export default class AuditLog extends BaseModel {
   static table = 'audit_logs'
